@@ -64,7 +64,7 @@ Die StorageAPI verwendet eine strukturierte Fehlerbehandlung:
 - Cache aktiviert: `true`
 - Cache TTL: `60.000ms` (1 Minute)
 - Maximale Wiederholungen: `3`
-- Initialer Wiederholungsverzögerung: `100ms`
+- Initiale Wiederholungsverzögerung: `100ms`
 - Circuit Breaker Schwellenwert: `0.5` (50% Fehlerrate)
 - Circuit Breaker Minimum Calls: `5`
 - Circuit Breaker Timeout: `30.000ms` (30 Sekunden)

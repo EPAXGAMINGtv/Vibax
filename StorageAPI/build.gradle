@@ -18,3 +18,24 @@ dependencies {
 test {
     useJUnitPlatform()
 }
+
+// Set Java version compatibility
+tasks.withType(JavaCompile) {
+    sourceCompatibility = '17'
+    targetCompatibility = '17'
+}
+
+// Create fat JAR task
+task fatJar(type: Jar) {
+    archiveClassifier = 'fat'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes(
+            'Main-Class': 'de.epax.storageapi.StorageAPI'
+        )
+    }
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    with jar
+}

@@ -1,20 +1,20 @@
 package de.epax.storageapi.health;
 
+import de.epax.storageapi.ServerConfig;
+import de.epax.storageapi.StorageAPI;
+import de.epax.storageapi.circuit.CircuitBreaker;
 import de.epax.storageapi.logging.Logger;
 import de.epax.storageapi.pool.ServerPool;
 import de.epax.storageapi.events.EventEmitter;
 import de.epax.storageapi.events.StorageEvent;
 import de.epax.storageapi.metrics.MetricsCollector;
-import de.epax.storageapi.circuit.CircuitBreaker;
 
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 
 public class HealthMonitor {
-    public enum HealthStatus { HEALTHY, DEGRADED, DOWN }
+    public enum HealthStatus {HEALTHY, DEGRADED, DOWN}
 
     private final ServerPool serverPool;
     private final MetricsCollector metrics;
@@ -45,6 +45,8 @@ public class HealthMonitor {
             circuitBreakers.put(server, new CircuitBreaker(server, 0.5, 5, 30000));
         }
         executor.scheduleAtFixedRate(this::performHealthChecks, 0, 5, TimeUnit.SECONDS);
+        // Schedule system info updates every 30 seconds
+        executor.scheduleAtFixedRate(this::updateSystemInfoForAllServers, 5, 30, TimeUnit.SECONDS);
         Logger.info("HealthMonitor started");
     }
 
@@ -126,5 +128,26 @@ public class HealthMonitor {
 
     public CircuitBreaker getCircuitBreaker(String serverName) {
         return circuitBreakers.get(serverName);
+    }
+
+    public void updateSystemInfoForAllServers() {
+        var servers = serverPool.getAllServers();
+        for (var entry : servers.entrySet()) {
+            String serverName = entry.getKey();
+            try {
+                double latency = getLatency(serverName);
+                if (latency > 0) {
+                    for (Map.Entry<Integer, ServerConfig> serverEntry : StorageAPI.getServers().entrySet()) {
+                        if (serverEntry.getValue().name.equals(serverName)) {
+                            serverEntry.getValue().avgLatency = latency;
+                            serverEntry.getValue().lastSystemInfoUpdate = System.currentTimeMillis();
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Logger.debug("Could not update latency for " + serverName);
+            }
+        }
     }
 }

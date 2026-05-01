@@ -805,10 +805,14 @@ public class StorageAPI {
 
     private static byte[] sendMultipartRequest(String url, byte[] data, String serverName) throws IOException {
         // Simplified multipart - in production use proper multipart encoding
-        return sendBinaryRequest(url, serverName);
+        try {
+            return sendBinaryRequest(url, serverName);
+        } catch (StorageAPIException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    private static byte[] sendBinaryRequest(String url, String serverName) throws IOException {
+    private static byte[] sendBinaryRequest(String url, String serverName) throws IOException, StorageAPIException {
         long start = System.currentTimeMillis();
         try {
             // Using HttpConnection - would need extended support for binary
@@ -817,11 +821,7 @@ public class StorageAPI {
             return new byte[0];
         } catch (Exception e) {
             metrics.recordFailure();
-            try {
-                throw new StorageAPIException("Binary request failed: " + url, ErrorCode.REQUEST_FAILED, e);
-            } catch (StorageAPIException ex) {
-                throw new RuntimeException(ex);
-            }
+            throw new StorageAPIException("Binary request failed: " + url, ErrorCode.REQUEST_FAILED, e);
         }
     }
 
