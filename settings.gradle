@@ -1,0 +1,4 @@
+rootProject.name = 'Vibax'
+include 'StorageServer'
+include 'WebServer'
+include 'StorageAPI'
