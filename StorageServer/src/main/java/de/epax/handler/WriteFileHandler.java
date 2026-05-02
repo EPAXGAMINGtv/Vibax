@@ -8,8 +8,20 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 
+/**
+ * SECURITY FIX:
+ *  - Added max write size limit (shared with upload limit, default 100 MB)
+ *  - Added URL-decoding for the path parameter
+ *  - Returns 413 Payload Too Large if exceeded
+ */
 public class WriteFileHandler extends AuthenticatedHandler implements HttpHandler {
+
+    private static final long MAX_WRITE_BYTES = Long.parseLong(
+            System.getProperty("vibax.upload.maxBytes", String.valueOf(100L * 1024 * 1024))
+    );
 
     public WriteFileHandler(String passwordHash) {
         super(passwordHash);
@@ -34,14 +46,24 @@ public class WriteFileHandler extends AuthenticatedHandler implements HttpHandle
             return;
         }
 
-        String path = query.substring("path=".length());
+        // SECURITY FIX: URL-decode the path parameter
+        String path = URLDecoder.decode(query.substring("path=".length()), StandardCharsets.UTF_8);
 
+        // SECURITY FIX: Enforce write size limit
         try (InputStream in = exchange.getRequestBody();
              FileOutputStream out = new FileOutputStream(FileManager.resolveSafePath(path))) {
 
             byte[] buffer = new byte[8192];
+            long written = 0;
             int len;
-            while ((len = in.read(buffer)) != -1) out.write(buffer, 0, len);
+            while ((len = in.read(buffer)) != -1) {
+                written += len;
+                if (written > MAX_WRITE_BYTES) {
+                    sendText(exchange, 413, "Payload Too Large (max " + MAX_WRITE_BYTES + " bytes)");
+                    return;
+                }
+                out.write(buffer, 0, len);
+            }
 
             sendText(exchange, 200, "Written to " + path);
 

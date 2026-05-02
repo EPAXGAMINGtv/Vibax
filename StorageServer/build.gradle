@@ -10,12 +10,15 @@ repositories {
 }
 
 dependencies {
+    implementation 'at.favre.lib:bcrypt:0.10.2'
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
     manifest {
         attributes(
                 'Main-Class': 'de.epax.StorageServerStart'
@@ -25,7 +28,11 @@ jar {
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
+
+    // Entfernt alle Signaturdateien, die den Fehler verursachen
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
 }
+
 
 test {
     useJUnitPlatform()

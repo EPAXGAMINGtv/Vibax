@@ -13,18 +13,23 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.GZIPOutputStream;
 
+/**
+ * SECURITY FIX:
+ *  - Removed storagePath from all responses (information disclosure)
+ *  - Fixed GZip Content-Length bug (sendResponseHeaders(200, 0) for streaming gzip)
+ */
 public class AdminHandler extends JsonHandler implements HttpHandler {
     private final String serverName;
     private final int port;
     private final int maxConnections;
-    private final String storagePath;
+    private final String storagePath; // kept for internal use only, never sent to client
 
     public AdminHandler(String passwordHash, String serverName, int port, int maxConnections, String storagePath) {
         super(passwordHash);
-        this.serverName = serverName;
-        this.port = port;
+        this.serverName     = serverName;
+        this.port           = port;
         this.maxConnections = maxConnections;
-        this.storagePath = storagePath;
+        this.storagePath    = storagePath;
     }
 
     @Override
@@ -58,21 +63,18 @@ public class AdminHandler extends JsonHandler implements HttpHandler {
             sendJson(exchange, 400, Map.of("error", "Missing action parameter"));
             return;
         }
-
         Map<String, String> params = parseQuery(query);
         String action = params.get("action");
-
         if (action == null) {
             sendJson(exchange, 400, Map.of("error", "Missing action"));
             return;
         }
-
         switch (action) {
-            case "stats" -> sendStats(exchange);
+            case "stats"  -> sendStats(exchange);
             case "config" -> sendConfig(exchange);
-            case "logs" -> sendLogs(exchange, params);
+            case "logs"   -> sendLogs(exchange, params);
             case "health" -> sendHealth(exchange);
-            default -> sendJson(exchange, 400, Map.of("error", "Unknown action: " + action));
+            default       -> sendJson(exchange, 400, Map.of("error", "Unknown action: " + action));
         }
     }
 
@@ -82,14 +84,11 @@ public class AdminHandler extends JsonHandler implements HttpHandler {
             sendJson(exchange, 400, Map.of("error", "Missing action parameter"));
             return;
         }
-
         Map<String, String> params = parseQuery(query);
-        String action = params.get("action");
-
-        if ("logs".equals(action)) {
+        if ("logs".equals(params.get("action"))) {
             sendJson(exchange, 200, Map.of("result", "logs cleared"));
         } else {
-            sendJson(exchange, 400, Map.of("error", "Unknown post action: " + action));
+            sendJson(exchange, 400, Map.of("error", "Unknown post action"));
         }
     }
 
@@ -108,13 +107,13 @@ public class AdminHandler extends JsonHandler implements HttpHandler {
 
     private void sendStats(HttpExchange exchange) throws IOException {
         Map<String, Object> stats = new ConcurrentHashMap<>();
-        stats.put("storagePath", storagePath);
+        // SECURITY FIX: storagePath removed from response
         stats.put("serverName", serverName);
         stats.put("maxConnections", maxConnections);
         try {
             java.io.File root = new java.io.File(storagePath);
             stats.put("totalSizeBytes", root.exists() ? calculateSize(root) : 0);
-            stats.put("fileCount", root.exists() ? countFiles(root) : 0);
+            stats.put("fileCount",      root.exists() ? countFiles(root)    : 0);
         } catch (Exception e) {
             stats.put("sizeError", e.getMessage());
         }
@@ -123,9 +122,9 @@ public class AdminHandler extends JsonHandler implements HttpHandler {
 
     private void sendConfig(HttpExchange exchange) throws IOException {
         Map<String, Object> config = new ConcurrentHashMap<>();
-        config.put("storagePath", storagePath);
+        // SECURITY FIX: storagePath removed from response
         config.put("serverName", serverName);
-        config.put("port", port);
+        config.put("port",       port);
         sendJson(exchange, 200, config);
     }
 
@@ -138,26 +137,33 @@ public class AdminHandler extends JsonHandler implements HttpHandler {
 
         StringBuilder log = new StringBuilder();
         log.append("=== Recent Log Entries ===\n");
-        log.append("2024-01-01 12:00:00 INFO Server started\n");
-        log.append("2024-01-01 12:00:01 INFO Handler registered: /online\n");
+        log.append("Log streaming not yet implemented.\n");
 
-        exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=UTF-8");
-        if (params.containsKey("gzip")) {
-            exchange.getResponseHeaders().set("Content-Encoding", "gzip");
-        }
         byte[] bytes = log.toString().getBytes(StandardCharsets.UTF_8);
-        exchange.sendResponseHeaders(200, bytes.length);
-        try (GZIPOutputStream gzip = new GZIPOutputStream(exchange.getResponseBody())) {
-            gzip.write(bytes);
+
+        if (params.containsKey("gzip")) {
+            // SECURITY FIX: Use 0 (chunked) for gzip — not bytes.length (which is uncompressed)
+            exchange.getResponseHeaders().set("Content-Type",     "text/plain; charset=UTF-8");
+            exchange.getResponseHeaders().set("Content-Encoding", "gzip");
+            exchange.sendResponseHeaders(200, 0);
+            try (GZIPOutputStream gzip = new GZIPOutputStream(exchange.getResponseBody())) {
+                gzip.write(bytes);
+            }
+        } else {
+            exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=UTF-8");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
         }
     }
 
     private void sendHealth(HttpExchange exchange) throws IOException {
         Map<String, Object> health = new ConcurrentHashMap<>();
-        health.put("status", "healthy");
-        health.put("timestamp", java.time.LocalDateTime.now());
-        health.put("uptime", ManagementFactory.getRuntimeMXBean().getUptime() + "ms");
-        health.put("storagePath", storagePath);
+        // SECURITY FIX: storagePath removed from response
+        health.put("status",    "healthy");
+        health.put("timestamp", java.time.LocalDateTime.now().toString());
+        health.put("uptime",    ManagementFactory.getRuntimeMXBean().getUptime() + "ms");
         sendJson(exchange, 200, health);
     }
 
@@ -187,23 +193,16 @@ public class AdminHandler extends JsonHandler implements HttpHandler {
 
     private Map<String, String> parseQuery(String query) {
         Map<String, String> result = new ConcurrentHashMap<>();
-        String[] pairs = query.split("&");
-        for (String pair : pairs) {
+        for (String pair : query.split("&")) {
             int idx = pair.indexOf("=");
             if (idx > 0) {
-                String key = decodeURL(pair.substring(0, idx));
-                String value = decodeURL(pair.substring(idx + 1));
-                result.put(key, value);
+                result.put(decodeURL(pair.substring(0, idx)), decodeURL(pair.substring(idx + 1)));
             }
         }
         return result;
     }
 
     private String decodeURL(String s) {
-        try {
-            return java.net.URLDecoder.decode(s, "UTF-8");
-        } catch (Exception e) {
-            return s;
-        }
+        try { return java.net.URLDecoder.decode(s, "UTF-8"); } catch (Exception e) { return s; }
     }
 }

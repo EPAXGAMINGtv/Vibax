@@ -6,11 +6,14 @@ import de.epax.file.FileManager;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * SECURITY FIX:
+ *  - Validate newName: reject path separators and ".." to prevent path traversal
+ *  - Reject null/blank newName
+ */
 public class RenameHandler extends AuthenticatedHandler implements HttpHandler {
 
     public RenameHandler(String passwordHash) {
@@ -37,11 +40,17 @@ public class RenameHandler extends AuthenticatedHandler implements HttpHandler {
         }
 
         Map<String, String> params = parseQuery(query);
-        String path = params.get("path");
+        String path    = params.get("path");
         String newName = params.get("newname");
 
         if (path == null || newName == null) {
             sendText(exchange, 400, "Required parameters: path, newname");
+            return;
+        }
+
+        // SECURITY FIX: Prevent path traversal via newName
+        if (newName.isBlank() || newName.contains("/") || newName.contains("\\") || newName.contains("..")) {
+            sendText(exchange, 400, "Invalid newname: must not contain path separators or '..'");
             return;
         }
 
@@ -55,23 +64,16 @@ public class RenameHandler extends AuthenticatedHandler implements HttpHandler {
 
     private Map<String, String> parseQuery(String query) {
         Map<String, String> result = new ConcurrentHashMap<>();
-        String[] pairs = query.split("&");
-        for (String pair : pairs) {
+        for (String pair : query.split("&")) {
             int idx = pair.indexOf("=");
             if (idx > 0) {
-                String key = decodeURL(pair.substring(0, idx));
-                String value = decodeURL(pair.substring(idx + 1));
-                result.put(key, value);
+                result.put(decodeURL(pair.substring(0, idx)), decodeURL(pair.substring(idx + 1)));
             }
         }
         return result;
     }
 
     private String decodeURL(String s) {
-        try {
-            return java.net.URLDecoder.decode(s, "UTF-8");
-        } catch (Exception e) {
-            return s;
-        }
+        try { return java.net.URLDecoder.decode(s, "UTF-8"); } catch (Exception e) { return s; }
     }
 }
