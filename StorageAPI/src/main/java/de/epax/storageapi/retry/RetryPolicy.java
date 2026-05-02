@@ -2,7 +2,6 @@ package de.epax.storageapi.retry;
 
 import de.epax.storageapi.StorageAPI;
 import de.epax.storageapi.logging.Logger;
-import de.epax.storageapi.StorageAPI.StorageAPIException;
 
 import java.io.IOException;
 import java.util.concurrent.Callable;
@@ -26,7 +25,7 @@ public class RetryPolicy {
         private double multiplier = 2.0;
         private BackoffStrategy strategy = BackoffStrategy.EXPONENTIAL_WITH_JITTER;
         private Predicate<Exception> retryCondition = e -> e instanceof IOException ||
-                e instanceof StorageAPIException && ((StorageAPIException) e).getCode() != StorageAPI.ErrorCode.FILE_NOT_FOUND;
+                e instanceof StorageAPI.StorageAPIException && ((StorageAPI.StorageAPIException) e).getCode() != StorageAPI.ErrorCode.FILE_NOT_FOUND;
 
         public Builder maxAttempts(int attempts) {
             this.maxAttempts = attempts;

@@ -13,7 +13,8 @@ public class WebServer {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        Map<String, Object> health = StorageAPI.getServerHealth("server-2");
-        Logger.info(health.toString());
+        StorageAPI.addServer("server-1","minecraft.techsvc.de:10111","9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
+        long space = StorageAPI.getFreeSpace("server-1");
+        Logger.info(String.valueOf(space));
     }
 }
