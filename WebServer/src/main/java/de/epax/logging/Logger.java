@@ -1,4 +1,4 @@
-package epax.logging;
+package de.epax.logging;
 
 import java.io.*;
 import java.text.SimpleDateFormat;

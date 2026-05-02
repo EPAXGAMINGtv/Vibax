@@ -82,7 +82,7 @@ public class StorageAPI {
         } else {
             Logger.warn("No servers available after waiting");
         }
-        
+
         Logger.info("StorageAPI initialized");
         Logger.info("Total Requests: " + metrics.getTotalRequests());
         Logger.info("Failed Requests: " + metrics.getFailedRequests());

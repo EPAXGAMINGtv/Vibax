@@ -1,12 +1,10 @@
-package epax;
+package de.epax;
 
 import de.epax.storageapi.ServerConfig;
 import de.epax.storageapi.StorageAPI;
-import epax.logging.Logger;
-import epax.user.UserManager;
+import de.epax.user.UserManager;
 
 import java.io.IOException;
-import java.util.Map;
 
 public class WebServer {
     public static void main(String[] args){
