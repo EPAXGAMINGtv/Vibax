@@ -3,6 +3,7 @@ package de.epax.storageapi.health;
 import de.epax.storageapi.ServerConfig;
 import de.epax.storageapi.StorageAPI;
 import de.epax.storageapi.circuit.CircuitBreaker;
+import de.epax.storageapi.internet.HttpConnection;
 import de.epax.storageapi.logging.Logger;
 import de.epax.storageapi.pool.ServerPool;
 import de.epax.storageapi.events.EventEmitter;
@@ -91,6 +92,9 @@ public class HealthMonitor {
                 cb.recordFailure();
             }
 
+            // Update server health in server pool
+            serverPool.updateServerHealth(serverName, online);
+
             // Emit events on state changes
             boolean wasUp = uptimeStart.containsKey(serverName);
             if (online && !wasUp) {
@@ -139,14 +143,64 @@ public class HealthMonitor {
                 if (latency > 0) {
                     for (Map.Entry<Integer, ServerConfig> serverEntry : StorageAPI.getServers().entrySet()) {
                         if (serverEntry.getValue().name.equals(serverName)) {
-                            serverEntry.getValue().avgLatency = latency;
-                            serverEntry.getValue().lastSystemInfoUpdate = System.currentTimeMillis();
+                            ServerConfig server = serverEntry.getValue();
+                            server.avgLatency = latency;
+                            server.lastSystemInfoUpdate = System.currentTimeMillis();
                             break;
                         }
                     }
                 }
             } catch (Exception e) {
                 Logger.debug("Could not update latency for " + serverName);
+            }
+            
+            // Update system info (free/total space) from server
+            try {
+                for (Map.Entry<Integer, ServerConfig> serverEntry : StorageAPI.getServers().entrySet()) {
+                    if (serverEntry.getValue().name.equals(serverName)) {
+                        ServerConfig server = serverEntry.getValue();
+                        String serverAddress = server.ip;
+                        String url = "http://" + serverAddress + "/info?path=/";
+                        String response = HttpConnection.sendRequest(url, "GET", server.passwordHash, null, null, null);
+                        
+                        // Parse response to extract freeSpace and totalSpace
+                        if (response != null) {
+                            // Expected JSON format: {"freeSpace":12345,"totalSpace":67890,...}
+                            long freeSpace = -1;
+                            long totalSpace = -1;
+                            
+                            int freeIndex = response.indexOf("\"freeSpace\":");
+                            if (freeIndex != -1) {
+                                int start = freeIndex + "\"freeSpace\":".length();
+                                int end = response.indexOf(",", start);
+                                if (end == -1) end = response.indexOf("}", start);
+                                if (end != -1) {
+                                    try {
+                                        freeSpace = Long.parseLong(response.substring(start, end).trim());
+                                    } catch (NumberFormatException ignored) {}
+                                }
+                            }
+                            
+                            int totalIndex = response.indexOf("\"totalSpace\":");
+                            if (totalIndex != -1) {
+                                int start = totalIndex + "\"totalSpace\":".length();
+                                int end = response.indexOf(",", start);
+                                if (end == -1) end = response.indexOf("}", start);
+                                if (end != -1) {
+                                    try {
+                                        totalSpace = Long.parseLong(response.substring(start, end).trim());
+                                    } catch (NumberFormatException ignored) {}
+                                }
+                            }
+                            
+                            if (freeSpace != -1) server.freeSpace = freeSpace;
+                            if (totalSpace != -1) server.totalSpace = totalSpace;
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Logger.debug("Could not update system info for " + serverName + ": " + e.getMessage());
             }
         }
     }

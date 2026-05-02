@@ -55,6 +55,34 @@ public class StorageAPI {
 
     public static void main(String[] args) throws IOException {
         InitStorageAPI(true);
+        
+        // Wait for servers to be checked and have valid status
+        String bestServer = null;
+        int attempts = 0;
+        int maxAttempts = 30; // Wait up to 30 seconds (30 * 1000ms)
+        while (bestServer == null && attempts < maxAttempts) {
+            try {
+                Thread.sleep(1000); // Wait 1 second between checks
+                bestServer = getServerWithMostFreeSpace();
+                if (bestServer != null) {
+                    break;
+                }
+                Logger.info("Waiting for servers to be online... attempt " + (attempts + 1));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            attempts++;
+        }
+        
+        if (bestServer != null) {
+            Logger.info("Server with most free space: " + bestServer);
+            boolean mkdirSuccess = StorageAPI.mkdir(bestServer, "lol");
+            Logger.info("Mkdir result: " + mkdirSuccess);
+        } else {
+            Logger.warn("No servers available after waiting");
+        }
+        
         Logger.info("StorageAPI initialized");
         Logger.info("Total Requests: " + metrics.getTotalRequests());
         Logger.info("Failed Requests: " + metrics.getFailedRequests());
@@ -219,6 +247,50 @@ public class StorageAPI {
         try {
             String info = readFile(serverName, path);
             return info != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Check if a file exists on the specified server
+     * @param serverName Name of the server
+     * @param filePath Path to the file
+     * @return true if file exists, false otherwise
+     */
+    public static boolean doesFileExists(String serverName, String filePath) {
+        return exists(serverName, filePath);
+    }
+
+    /**
+     * Check if a directory exists on the specified server
+     * @param serverName Name of the server
+     * @param dirPath Path to the directory
+     * @return true if directory exists, false otherwise
+     */
+    public static boolean doesDirExists(String serverName, String dirPath) {
+        try {
+            // Try to list the directory - if it succeeds, it's a directory
+            List<String> contents = listFiles(serverName, dirPath);
+            return contents != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Create a directory on the specified server
+     * @param serverName Name of the server
+     * @param dirPath Path of the directory to create
+     * @return true if directory was created successfully, false otherwise
+     */
+    public static boolean mkdir(String serverName, String dirPath) {
+        try {
+            String serverAddress = resolveServerUrl(serverName);
+            if (serverAddress == null) throw new StorageAPIException("Server not found", ErrorCode.SERVER_NOT_FOUND);
+            String url = "http://" + serverAddress + "/createdirectory?path=" + URLEncoder.encode(dirPath, StandardCharsets.UTF_8);
+            String response = sendPostRequest(url, "", serverName); // Empty body for directory creation
+            return response != null && response.contains("Directory created");
         } catch (Exception e) {
             return false;
         }

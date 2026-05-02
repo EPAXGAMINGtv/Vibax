@@ -36,6 +36,16 @@ public class HealthHandler extends JsonHandler implements HttpHandler {
         health.put("uptime", getUptime());
         health.put("memory", getMemoryStats());
         health.put("storagePath", getStoragePath());
+        
+        // Add disk space information
+        try {
+            java.io.File root = new java.io.File(getStoragePath());
+            health.put("totalSpace", root.getTotalSpace());
+            health.put("freeSpace", root.getFreeSpace());
+        } catch (Exception e) {
+            health.put("totalSpace", -1L);
+            health.put("freeSpace", -1L);
+        }
 
         sendJson(exchange, 200, health);
     }
