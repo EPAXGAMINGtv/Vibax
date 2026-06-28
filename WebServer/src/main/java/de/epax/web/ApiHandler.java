@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpHandler;
 import de.epax.auth.SessionManager;
 import de.epax.comment.CommentManager;
 import de.epax.fyp.FYPService;
+import de.epax.message.MessageManager;
 import de.epax.user.User;
 import de.epax.user.UserManager;
 import de.epax.util.JsonUtil;
@@ -86,8 +87,18 @@ public class ApiHandler implements HttpHandler {
                 handleAddComment(body, exchange);
             } else if (path.startsWith("/api/media/") && "GET".equals(method)) {
                 handleMedia(path, exchange);
+            } else if (path.equals("/api/hashtags") && "GET".equals(method)) {
+                handleHashtags(exchange);
+            } else if (path.equals("/api/hashtags/search") && "GET".equals(method)) {
+                handleSearchHashtags(exchange);
             } else if (path.equals("/api/media") && "POST".equals(method)) {
                 handleUploadMedia(body, exchange);
+            } else if (path.equals("/api/messages") && "POST".equals(method)) {
+                handleSendMessage(body, exchange);
+            } else if (path.startsWith("/api/messages/") && "GET".equals(method)) {
+                handleGetMessages(path, exchange);
+            } else if (path.equals("/api/share/tofriend") && "POST".equals(method)) {
+                handleShareToFriend(body, exchange);
             } else {
                 sendJson(exchange, 404, JsonUtil.object(Map.of("error", "Not found")));
             }
@@ -238,12 +249,25 @@ public class ApiHandler implements HttpHandler {
         User user = requireUser(ex);
         if (user == null) return;
         Map<String, String> data = JsonUtil.parseSimpleObject(body);
-        List<String> tags = data.containsKey("tags") ?
-                Arrays.asList(data.get("tags").split(",")) : new ArrayList<>();
+        List<String> tags = new ArrayList<>();
+        if (data.containsKey("tags") && !data.get("tags").isBlank()) {
+            for (String t : data.get("tags").split(",")) {
+                String trimmed = t.trim().toLowerCase().replaceAll("^#+", "");
+                if (!trimmed.isEmpty()) tags.add(trimmed);
+            }
+        }
+        String desc = data.get("description");
+        if (desc != null) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("#(\\w+)").matcher(desc);
+            while (m.find()) {
+                String tag = m.group(1).toLowerCase();
+                if (!tags.contains(tag)) tags.add(tag);
+            }
+        }
         String id = VideoManager.createVideo(
                 user.username,
                 data.get("title"),
-                data.get("description"),
+                desc,
                 tags,
                 data.get("mediaPath"),
                 data.getOrDefault("mediaType", "video")
@@ -326,14 +350,43 @@ public class ApiHandler implements HttpHandler {
         }
     }
 
+    private void handleHashtags(HttpExchange ex) throws IOException {
+        List<String> allTags = VideoManager.getAllVideos().stream()
+                .flatMap(v -> v.tags.stream())
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+        sendJson(ex, 200, JsonUtil.object(Map.of("hashtags", allTags)));
+    }
+
+    private void handleSearchHashtags(HttpExchange ex) throws IOException {
+        String q = ex.getRequestURI().getQuery();
+        String query = q != null && q.startsWith("q=") ? decode(q.substring(2)).toLowerCase() : "";
+        List<String> allTags = VideoManager.getAllVideos().stream()
+                .flatMap(v -> v.tags.stream())
+                .distinct()
+                .filter(t -> query.isEmpty() || t.toLowerCase().contains(query))
+                .sorted()
+                .collect(Collectors.toList());
+        sendJson(ex, 200, JsonUtil.object(Map.of("hashtags", allTags)));
+    }
+
     private void handleMedia(String path, HttpExchange ex) throws IOException {
         String mediaPath = decode(path.substring("/api/media/".length()));
         if (!mediaPath.startsWith("/")) mediaPath = "/" + mediaPath;
+
+        String contentType = "application/octet-stream";
+        if (mediaPath.endsWith(".jpg") || mediaPath.endsWith(".jpeg")) contentType = "image/jpeg";
+        else if (mediaPath.endsWith(".png")) contentType = "image/png";
+        else if (mediaPath.endsWith(".mp4")) contentType = "video/mp4";
+        else if (mediaPath.endsWith(".webm")) contentType = "video/webm";
+
         String content = StorageHelper.read(mediaPath);
         if (content == null) {
             sendJson(ex, 404, JsonUtil.object(Map.of("error", "Media not found")));
             return;
         }
+
         byte[] bytes;
         if (content.startsWith("data:")) {
             int comma = content.indexOf(',');
@@ -341,13 +394,10 @@ public class ApiHandler implements HttpHandler {
         } else {
             bytes = content.getBytes(StandardCharsets.UTF_8);
         }
-        String contentType = "application/octet-stream";
-        if (mediaPath.endsWith(".jpg") || mediaPath.endsWith(".jpeg")) contentType = "image/jpeg";
-        else if (mediaPath.endsWith(".png")) contentType = "image/png";
-        else if (mediaPath.endsWith(".mp4")) contentType = "video/mp4";
-        else if (mediaPath.endsWith(".webm")) contentType = "video/webm";
+
         ex.getResponseHeaders().set("Content-Type", contentType);
         ex.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        ex.getResponseHeaders().set("Accept-Ranges", "bytes");
         ex.sendResponseHeaders(200, bytes.length);
         try (OutputStream os = ex.getResponseBody()) { os.write(bytes); }
     }
@@ -368,6 +418,60 @@ public class ApiHandler implements HttpHandler {
             sendJson(ex, 201, JsonUtil.object(Map.of("path", path)));
         } else {
             sendJson(ex, 500, JsonUtil.object(Map.of("error", "Upload failed")));
+        }
+    }
+
+    private void handleSendMessage(String body, HttpExchange ex) throws IOException {
+        User user = requireUser(ex);
+        if (user == null) return;
+        Map<String, String> data = JsonUtil.parseSimpleObject(body);
+        String to = data.get("to");
+        String text = data.get("text");
+        if (to == null || text == null) {
+            sendJson(ex, 400, JsonUtil.object(Map.of("error", "to and text required")));
+            return;
+        }
+        if (UserManager.getUser(to) == null) {
+            sendJson(ex, 404, JsonUtil.object(Map.of("error", "User not found")));
+            return;
+        }
+        String id = MessageManager.sendMessage(user.username, to, text);
+        if (id != null) {
+            sendJson(ex, 201, JsonUtil.object(Map.of("id", id)));
+        } else {
+            sendJson(ex, 500, JsonUtil.object(Map.of("error", "Failed to send message")));
+        }
+    }
+
+    private void handleGetMessages(String path, HttpExchange ex) throws IOException {
+        User user = requireUser(ex);
+        if (user == null) return;
+        String other = path.substring("/api/messages/".length());
+        List<Map<String, Object>> messages = MessageManager.getMessages(user.username, other).stream()
+                .map(MessageManager::toPublicMap).collect(Collectors.toList());
+        MessageManager.markRead(user.username, other);
+        sendJson(ex, 200, JsonUtil.object(Map.of("messages", messages)));
+    }
+
+    private void handleShareToFriend(String body, HttpExchange ex) throws IOException {
+        User user = requireUser(ex);
+        if (user == null) return;
+        Map<String, String> data = JsonUtil.parseSimpleObject(body);
+        String to = data.get("to");
+        String videoId = data.get("videoId");
+        if (to == null || videoId == null) {
+            sendJson(ex, 400, JsonUtil.object(Map.of("error", "to and videoId required")));
+            return;
+        }
+        if (UserManager.getUser(to) == null) {
+            sendJson(ex, 404, JsonUtil.object(Map.of("error", "User not found")));
+            return;
+        }
+        String id = MessageManager.sendMessage(user.username, to, "", videoId);
+        if (id != null) {
+            sendJson(ex, 201, JsonUtil.object(Map.of("id", id)));
+        } else {
+            sendJson(ex, 500, JsonUtil.object(Map.of("error", "Failed to share")));
         }
     }
 

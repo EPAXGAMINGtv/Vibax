@@ -24,49 +24,11 @@ public class WebServer {
         StorageAPI.InitStorageAPI(false);
         Logger.info("Vibax WebServer starting on port " + port);
 
-        seedDemoData();
-
         new WebServerHTTP(port, 50);
         Logger.info("Vibax ready at http://localhost:" + port);
     }
 
-    private static void seedDemoData() {
-        if (StorageHelper.exists("/users/index.json")) {
-            Logger.info("Demo data already exists, skipping seed");
-            return;
-        }
 
-        Logger.info("Seeding demo data...");
-
-        UserManager.createUser("alice", "Alice", "demo123");
-        UserManager.createUser("bob", "Bob", "demo123");
-        UserManager.createUser("charlie", "Charlie", "demo123");
-        UserManager.createUser("demo", "Demo User", "demo123");
-
-        var alice = UserManager.getUser("alice");
-        if (alice != null) {
-            alice.bio = "Dance & Music creator";
-            UserManager.updateUser(alice);
-        }
-        var bob = UserManager.getUser("bob");
-        if (bob != null) {
-            bob.bio = "Comedy king";
-            UserManager.updateUser(bob);
-        }
-
-        UserManager.followUser("demo", "alice");
-        UserManager.followUser("demo", "bob");
-        UserManager.sendFriendRequest("demo", "alice");
-        UserManager.acceptFriendRequest("alice", "demo");
-
-        createDemoVideo("alice", "Epic Dance Move", "Check out this new dance!", "dance,viral,music", "gradient1");
-        createDemoVideo("bob", "Funny Cat Moment", "You won't believe this!", "comedy,funny,viral", "gradient2");
-        createDemoVideo("charlie", "Travel Vlog Paris", "Amazing city views", "travel,vlog,paris", "gradient3");
-        createDemoVideo("alice", "Morning Routine", "Start your day right", "lifestyle,morning", "gradient4");
-        createDemoVideo("bob", "Prank Gone Wrong", "Classic prank fail", "comedy,prank", "gradient5");
-
-        Logger.info("Demo data seeded successfully");
-    }
 
     private static void createDemoVideo(String author, String title, String desc, String tags, String gradient) {
         List<String> tagList = Arrays.asList(tags.split(","));

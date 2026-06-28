@@ -6,6 +6,8 @@ import de.epax.file.FileManager;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 
 public class ReadFileHandler extends AuthenticatedHandler implements HttpHandler {
 
@@ -34,7 +36,7 @@ public class ReadFileHandler extends AuthenticatedHandler implements HttpHandler
             return;
         }
 
-        String path = query.substring("path=".length());
+        String path = URLDecoder.decode(query.substring("path=".length()), StandardCharsets.UTF_8);
 
         try {
             String content = FileManager.readFile(path);

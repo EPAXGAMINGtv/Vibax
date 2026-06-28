@@ -35,7 +35,7 @@ public class VibaxProxy {
             }
         } else {
             backends.add("http://127.0.0.1:8081");
-            backends.add("http://127.0.0.1:8082");
+            backends.add("http://127.0.0.1:8081");
         }
 
         HttpClient client = HttpClient.newBuilder()

@@ -32,7 +32,7 @@ public class UserManager {
 
     public static boolean verifyPassword(User user, String password) {
         if (user == null || password == null) return false;
-        return user.passwordHash.equals(hashPassword(password));
+        return user.passwordHash != null && user.passwordHash.equals(hashPassword(password));
     }
 
     private static String getUserPath(String username) {

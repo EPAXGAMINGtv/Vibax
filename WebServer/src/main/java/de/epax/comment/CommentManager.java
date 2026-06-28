@@ -30,6 +30,8 @@ public class CommentManager {
         c.authorDisplayName = author.visibleName;
         c.text = text.trim();
 
+        StorageHelper.mkdir(COMMENTS_ROOT + "/" + videoId);
+
         if (StorageHelper.write(getCommentPath(videoId, c.id), toJson(c))) {
             video.comments++;
             VideoManager.updateVideo(video);
@@ -41,6 +43,7 @@ public class CommentManager {
     public static List<Comment> getComments(String videoId) {
         String dir = COMMENTS_ROOT + "/" + videoId;
         List<String> files = StorageHelper.listFiles(dir);
+        if (files == null || files.isEmpty()) return new ArrayList<>();
         return files.stream()
                 .filter(f -> f.endsWith(".json"))
                 .map(f -> StorageHelper.read(dir + "/" + f))

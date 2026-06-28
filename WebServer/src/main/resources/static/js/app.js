@@ -142,7 +142,7 @@ function createFeedItem(video, index) {
     const isImage = video.mediaType === 'image';
     const mediaEl = isImage
         ? `<img class="feed-media" src="${API.mediaUrl(video.mediaPath)}" alt="${video.title}">`
-        : `<video class="feed-media" src="${API.mediaUrl(video.mediaPath)}" loop muted playsinline></video>`;
+        : `<video class="feed-media" src="${API.mediaUrl(video.mediaPath)}" loop muted playsinline preload="auto"></video>`;
 
     const liked = currentUser && currentUser.likes && currentUser.likes.includes(video.id);
 
@@ -168,6 +168,7 @@ function createFeedItem(video, index) {
                 <span class="icon">↗</span>
                 <span class="count">${formatCount(video.shares)}</span>
             </button>
+            ${isImage ? '' : '<button class="action-btn sound-btn" id="sound-' + video.id + '"><span class="icon">🔇</span></button>'}
         </div>
     `;
 
@@ -177,6 +178,23 @@ function createFeedItem(video, index) {
     item.querySelectorAll('[data-user]').forEach(el => {
         el.addEventListener('click', () => showUserProfile(el.dataset.user));
     });
+
+    const mediaElClick = item.querySelector('.feed-media');
+    if (mediaElClick) mediaElClick.addEventListener('click', () => openVideoPreview(video.id));
+
+    const soundBtn = item.querySelector('.sound-btn');
+    if (soundBtn) {
+        soundBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const video = item.querySelector('video');
+            if (!video) return;
+            video.muted = !video.muted;
+            soundBtn.querySelector('.icon').textContent = video.muted ? '🔇' : '🔊';
+        });
+    }
+
+    const videoEl = item.querySelector('video');
+    if (videoEl) videoEl.load();
 
     return item;
 }
@@ -188,7 +206,18 @@ function setupFeedObserver() {
             if (entry.isIntersecting) {
                 const videoId = entry.target.dataset.videoId;
                 const video = entry.target.querySelector('video');
-                if (video) { video.play().catch(() => {}); }
+                if (video) {
+                    if (video.readyState >= 3) {
+                        video.play().catch(() => {});
+                    } else {
+                        const playWhenReady = () => {
+                            video.play().catch(() => {});
+                            video.removeEventListener('canplay', playWhenReady);
+                        };
+                        video.addEventListener('canplay', playWhenReady);
+                        video.load();
+                    }
+                }
                 if (!viewedVideos.has(videoId)) {
                     viewedVideos.add(videoId);
                     API.watch(videoId).catch(() => {});
@@ -229,6 +258,11 @@ function setupModals() {
     document.getElementById('close-share').addEventListener('click', () => {
         document.getElementById('share-modal').classList.add('hidden');
     });
+    document.getElementById('close-chat').addEventListener('click', () => {
+        document.getElementById('chat-modal').classList.add('hidden');
+        if (chatPollInterval) clearInterval(chatPollInterval);
+        chatPollInterval = null;
+    });
     document.getElementById('comment-submit').addEventListener('click', submitComment);
     document.getElementById('comment-text').addEventListener('keypress', e => {
         if (e.key === 'Enter') submitComment();
@@ -236,6 +270,21 @@ function setupModals() {
     document.getElementById('copy-link').addEventListener('click', () => {
         navigator.clipboard.writeText(document.getElementById('share-link').textContent);
         alert('Link kopiert!');
+    });
+    document.getElementById('chat-send').addEventListener('click', sendChatMessage);
+    document.getElementById('chat-text').addEventListener('keypress', e => {
+        if (e.key === 'Enter') sendChatMessage();
+    });
+
+    document.getElementById('close-video-preview').addEventListener('click', () => {
+        document.getElementById('video-preview-modal').classList.add('hidden');
+        document.getElementById('video-preview-container').innerHTML = '';
+    });
+    document.getElementById('video-preview-modal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) {
+            document.getElementById('video-preview-modal').classList.add('hidden');
+            document.getElementById('video-preview-container').innerHTML = '';
+        }
     });
 }
 
@@ -275,12 +324,39 @@ async function submitComment() {
     }
 }
 
+let currentShareVideoId = null;
+
 async function openShare(videoId) {
+    currentShareVideoId = videoId;
     try {
         await API.share(videoId);
         const link = `${window.location.origin}/?video=${videoId}`;
         document.getElementById('share-link').textContent = link;
+        const friendsContainer = document.getElementById('share-friends-list');
+        if (currentUser && currentUser.friendsList && currentUser.friendsList.length) {
+            friendsContainer.innerHTML = currentUser.friendsList.map(f =>
+                `<div class="share-friend-item" data-friend="${esc(f)}">
+                    <div class="avatar-sm">${f[0].toUpperCase()}</div>
+                    <span>@${esc(f)}</span>
+                </div>`
+            ).join('');
+            friendsContainer.querySelectorAll('.share-friend-item').forEach(el => {
+                el.addEventListener('click', () => shareToFriend(videoId, el.dataset.friend));
+            });
+        } else {
+            friendsContainer.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:8px;">Keine Freunde zum Teilen</div>';
+        }
         document.getElementById('share-modal').classList.remove('hidden');
+    } catch (ex) {
+        alert(ex.message);
+    }
+}
+
+async function shareToFriend(videoId, friend) {
+    try {
+        await API.shareToFriend(videoId, friend);
+        document.getElementById('share-modal').classList.add('hidden');
+        alert('Video an @' + friend + ' gesendet!');
     } catch (ex) {
         alert(ex.message);
     }
@@ -292,11 +368,66 @@ function setupSearch() {
         clearTimeout(timeout);
         timeout = setTimeout(() => doSearch(e.target.value), 300);
     });
+    loadTagCategories();
+}
+
+let activeTagFilter = '';
+
+async function loadTagCategories() {
+    try {
+        const data = await API.getHashtags();
+        const tags = data.hashtags || [];
+        const container = document.getElementById('search-tags');
+        if (tags.length === 0) { container.innerHTML = ''; return; }
+        container.innerHTML = '<span class="tag-chip' + (activeTagFilter === '' ? ' active' : '') + '" data-tag="">Alle</span>' +
+            tags.slice(0, 15).map(t => `<span class="tag-chip${activeTagFilter === t ? ' active' : ''}" data-tag="${esc(t)}">#${esc(t)}</span>`).join('');
+        container.querySelectorAll('.tag-chip').forEach(el => {
+            el.addEventListener('click', () => {
+                activeTagFilter = el.dataset.tag;
+                container.querySelectorAll('.tag-chip').forEach(c => c.classList.remove('active'));
+                el.classList.add('active');
+                const q = document.getElementById('search-input').value.trim();
+                if (q) doSearch(q);
+                else searchByTag(activeTagFilter);
+            });
+        });
+    } catch {}
+}
+
+async function searchByTag(tag) {
+    const container = document.getElementById('search-results');
+    container.innerHTML = '<div class="empty-state">Suche...</div>';
+    try {
+        const videos = tag ? await API.searchVideosByTag(tag) : await API.searchVideos('');
+        let html = '';
+        if (videos.videos && videos.videos.length) {
+            html += '<div class="search-section"><h3>Videos mit #' + esc(tag) + '</h3>';
+            html += videos.videos.map(v => `
+                <div class="search-video" data-video="${v.id}">
+                    <video class="search-video-thumb" src="${API.mediaUrl(v.mediaPath)}" preload="auto" muted playsinline></video>
+                    <div><strong>${esc(v.title)}</strong><br><small>@${esc(v.authorUsername)} <span style="color:var(--secondary)">${(v.tags||[]).map(t => '#'+t).join(' ')}</span></small></div>
+                </div>
+            `).join('');
+        }
+        container.innerHTML = html || '<div class="empty-state">Keine Videos mit diesem Tag</div>';
+        container.querySelectorAll('[data-user]').forEach(el => {
+            el.addEventListener('click', () => showUserProfile(el.dataset.user));
+        });
+        container.querySelectorAll('[data-video]').forEach(el => {
+            el.addEventListener('click', () => openVideoPreview(el.dataset.video));
+        });
+    } catch (ex) {
+        container.innerHTML = `<div class="empty-state">${ex.message}</div>`;
+    }
 }
 
 async function doSearch(query) {
     const container = document.getElementById('search-results');
-    if (!query.trim()) { container.innerHTML = ''; return; }
+    if (!query.trim()) {
+        if (activeTagFilter) { searchByTag(activeTagFilter); return; }
+        container.innerHTML = '';
+        return;
+    }
 
     container.innerHTML = '<div class="empty-state">Suche...</div>';
     try {
@@ -320,8 +451,8 @@ async function doSearch(query) {
             html += '<div class="search-section"><h3>Videos</h3>';
             html += videos.videos.map(v => `
                 <div class="search-video" data-video="${v.id}">
-                    <div class="avatar-sm">▶</div>
-                    <div><strong>${esc(v.title)}</strong><br><small>@${esc(v.authorUsername)}</small></div>
+                    <video class="search-video-thumb" src="${API.mediaUrl(v.mediaPath)}" preload="auto" muted playsinline></video>
+                    <div><strong>${esc(v.title)}</strong><br><small>@${esc(v.authorUsername)} <span style="color:var(--secondary)">${(v.tags||[]).map(t => '#'+t).join(' ')}</span></small></div>
                 </div>
             `).join('');
             html += '</div>';
@@ -331,12 +462,59 @@ async function doSearch(query) {
         container.querySelectorAll('[data-user]').forEach(el => {
             el.addEventListener('click', () => showUserProfile(el.dataset.user));
         });
+        container.querySelectorAll('[data-video]').forEach(el => {
+            el.addEventListener('click', () => openVideoPreview(el.dataset.video));
+        });
     } catch (ex) {
         container.innerHTML = `<div class="empty-state">${ex.message}</div>`;
     }
 }
 
 function setupUpload() {
+    const tagInput = document.getElementById('upload-tags');
+    const suggestions = document.getElementById('tag-suggestions');
+
+    tagInput.addEventListener('input', async () => {
+        const val = tagInput.value;
+        const lastTag = val.split(',').pop().trim().toLowerCase();
+        if (lastTag.length < 1) {
+            suggestions.classList.add('hidden');
+            return;
+        }
+        try {
+            const data = await API.getHashtags(lastTag);
+            const filtered = (data.hashtags || []).filter(t => t !== lastTag).slice(0, 5);
+            if (filtered.length === 0) {
+                suggestions.classList.add('hidden');
+                return;
+            }
+            suggestions.innerHTML = filtered.map(t =>
+                `<div class="tag-suggestion" data-tag="${t}">#${esc(t)}</div>`
+            ).join('');
+            suggestions.classList.remove('hidden');
+            suggestions.querySelectorAll('.tag-suggestion').forEach(el => {
+                el.addEventListener('click', () => {
+                    const parts = val.split(',');
+                    parts[parts.length - 1] = el.dataset.tag;
+                    tagInput.value = parts.join(',') + ',';
+                    tagInput.focus();
+                    suggestions.classList.add('hidden');
+                });
+            });
+        } catch { /* ignore */ }
+    });
+
+    tagInput.addEventListener('blur', () => {
+        setTimeout(() => suggestions.classList.add('hidden'), 200);
+    });
+
+    document.getElementById('upload-file').addEventListener('change', () => {
+        const file = document.getElementById('upload-file').files[0];
+        if (file) {
+            document.getElementById('progress-text').textContent = 'Datei ausgewählt: ' + file.name;
+        }
+    });
+
     document.getElementById('upload-btn').addEventListener('click', async () => {
         if (!currentUser) return alert('Bitte anmelden');
 
@@ -347,25 +525,52 @@ function setupUpload() {
 
         if (!title) return alert('Titel erforderlich');
 
+        const progressBar = document.getElementById('upload-progress');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        const uploadBtn = document.getElementById('upload-btn');
+
         try {
             let mediaPath = '';
             let mediaType = 'video';
+
             if (file) {
+                progressBar.classList.remove('hidden');
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = 'Upload läuft...';
+
                 const base64 = await fileToBase64(file);
-                const upload = await API.uploadMedia(base64, file.name);
+                const upload = await API.uploadMediaWithProgress(base64, file.name, (pct) => {
+                    progressFill.style.width = pct + '%';
+                    progressText.textContent = pct + '%';
+                });
                 mediaPath = upload.path;
                 mediaType = file.type.startsWith('image/') ? 'image' : 'video';
             }
 
+            progressText.textContent = 'Video wird erstellt...';
             await API.createVideo({ title, description: desc, tags, mediaPath, mediaType });
-            alert('Video gepostet!');
-            document.getElementById('upload-title').value = '';
-            document.getElementById('upload-desc').value = '';
-            document.getElementById('upload-tags').value = '';
-            document.getElementById('upload-file').value = '';
-            document.querySelector('[data-view="feed"]').click();
+
+            progressFill.style.width = '100%';
+            progressText.textContent = 'Fertig!';
+            setTimeout(() => {
+                document.getElementById('upload-title').value = '';
+                document.getElementById('upload-desc').value = '';
+                document.getElementById('upload-tags').value = '';
+                document.getElementById('upload-file').value = '';
+                progressBar.classList.add('hidden');
+                progressFill.style.width = '0%';
+                progressText.textContent = '0%';
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = 'Posten';
+                document.querySelector('[data-view="feed"]').click();
+            }, 500);
         } catch (ex) {
-            alert(ex.message);
+            progressBar.classList.add('hidden');
+            progressFill.style.width = '0%';
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = 'Posten';
+            alert('Fehler: ' + ex.message);
         }
     });
 }
@@ -429,12 +634,16 @@ async function showUserProfile(username) {
     renderVideoGrid(document.getElementById('user-profile-videos'), data.videos || []);
 }
 
+let chatPartner = null;
+let chatPollInterval = null;
+
 async function loadFriends() {
     if (!currentUser) return;
     currentUser = await API.me();
 
     const reqContainer = document.getElementById('friend-requests');
     const friendsContainer = document.getElementById('friends-list');
+    const chatListContainer = document.getElementById('friends-chat-list');
 
     const requests = currentUser.friendRequestsReceived || [];
     if (requests.length === 0) {
@@ -452,13 +661,80 @@ async function loadFriends() {
     const friends = currentUser.friendsList || [];
     if (friends.length === 0) {
         friendsContainer.innerHTML = '<div class="empty-state">Noch keine Freunde</div>';
+        chatListContainer.innerHTML = '';
     } else {
         friendsContainer.innerHTML = friends.map(u => `
             <div class="friend-item">
                 <span>@${esc(u)}</span>
                 <button onclick="showUserProfile('${u}')">Profil</button>
+                <button class="friend-chat-btn" onclick="openChat('${u}')">💬</button>
             </div>
         `).join('');
+        chatListContainer.innerHTML = '<h2 class="view-title" style="margin-top:1rem">Chats</h2>' +
+            friends.map(u => `
+                <div class="friend-item" style="cursor:pointer" onclick="openChat('${u}')">
+                    <span>@${esc(u)}</span>
+                    <span style="color:var(--text-muted);font-size:0.8rem">💬 Chat</span>
+                </div>
+            `).join('');
+    }
+}
+
+function openChat(username) {
+    chatPartner = username;
+    document.getElementById('chat-partner-name').textContent = '@' + username;
+    document.getElementById('chat-modal').classList.remove('hidden');
+    document.getElementById('chat-messages').innerHTML = '<div class="empty-state">Lade...</div>';
+    loadChatMessages(username);
+    if (chatPollInterval) clearInterval(chatPollInterval);
+    chatPollInterval = setInterval(() => loadChatMessages(username, true), 3000);
+}
+
+async function loadChatMessages(username, silent) {
+    try {
+        const data = await API.getMessages(username);
+        const msgs = data.messages || [];
+        const container = document.getElementById('chat-messages');
+        if (silent && container.querySelector('.empty-state')) silent = false;
+        if (!silent) {
+            if (msgs.length === 0) {
+                container.innerHTML = '<div class="empty-state">Keine Nachrichten. Schreib etwas!</div>';
+                return;
+            }
+            container.innerHTML = msgs.map(m => `
+                <div class="chat-msg ${m.from === currentUser.username ? 'sent' : 'received'}">
+                    ${esc(m.text)}
+                    ${m.videoId ? '<br><small style="opacity:0.8">📹 Video geteilt</small>' : ''}
+                    <div class="time">${timeAgo(m.createdAt)}</div>
+                </div>
+            `).join('');
+            container.scrollTop = container.scrollHeight;
+        } else {
+            if (msgs.length > container.children.length) {
+                container.innerHTML = msgs.map(m => `
+                    <div class="chat-msg ${m.from === currentUser.username ? 'sent' : 'received'}">
+                        ${esc(m.text)}
+                        ${m.videoId ? '<br><small style="opacity:0.8">📹 Video geteilt</small>' : ''}
+                        <div class="time">${timeAgo(m.createdAt)}</div>
+                    </div>
+                `).join('');
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+    } catch (ex) {
+        if (!silent) document.getElementById('chat-messages').innerHTML = `<div class="empty-state">${ex.message}</div>`;
+    }
+}
+
+async function sendChatMessage() {
+    const text = document.getElementById('chat-text').value.trim();
+    if (!text || !chatPartner) return;
+    document.getElementById('chat-text').value = '';
+    try {
+        await API.sendMessage(chatPartner, text);
+        loadChatMessages(chatPartner);
+    } catch (ex) {
+        alert(ex.message);
     }
 }
 
@@ -503,9 +779,52 @@ function renderVideoGrid(container, videos) {
     }
     container.innerHTML = videos.map(v => `
         <div class="profile-video-thumb" data-video="${v.id}">
-            <img src="${API.mediaUrl(v.mediaPath)}" alt="${esc(v.title)}">
+            <video src="${API.mediaUrl(v.mediaPath)}" preload="metadata" muted playsinline></video>
+            <div class="thumb-play-btn">▶</div>
+            <div class="thumb-title">${esc(v.title)}</div>
         </div>
     `).join('');
+    container.querySelectorAll('.profile-video-thumb').forEach(el => {
+        el.addEventListener('click', () => openVideoPreview(el.dataset.video));
+    });
+}
+
+function openVideoPreview(videoId) {
+    const video = feedVideos.find(v => v.id === videoId);
+    if (!video) {
+        API.getVideo(videoId).then(v => {
+            document.getElementById('video-preview-modal').classList.remove('hidden');
+            document.getElementById('video-preview-container').innerHTML = createVideoPreviewHtml(v);
+            const pv = document.querySelector('.preview-media');
+            if (pv && pv.tagName === 'VIDEO') pv.play().catch(() => {});
+        }).catch(() => alert('Video nicht gefunden'));
+        return;
+    }
+    document.getElementById('video-preview-modal').classList.remove('hidden');
+    document.getElementById('video-preview-container').innerHTML = createVideoPreviewHtml(video);
+    const pv = document.querySelector('.preview-media');
+    if (pv && pv.tagName === 'VIDEO') pv.play().catch(() => {});
+}
+
+function createVideoPreviewHtml(video) {
+    const isImage = video.mediaType === 'image';
+    const media = isImage
+        ? `<img class="preview-media" src="${API.mediaUrl(video.mediaPath)}" alt="${esc(video.title)}">`
+        : `<video class="preview-media" src="${API.mediaUrl(video.mediaPath)}" controls autoplay playsinline preload="auto"></video>`;
+    return `
+        <div class="preview-header">
+            <div class="preview-author" onclick="showUserProfile('${video.authorUsername}')">@${esc(video.authorUsername)}</div>
+            <div class="preview-title">${esc(video.title)}</div>
+            <div class="preview-desc">${esc(video.description || '')}</div>
+            <div class="preview-tags">${(video.tags || []).map(t => '#' + t).join(' ')}</div>
+        </div>
+        ${media}
+        <div class="preview-stats">
+            <span>❤ ${formatCount(video.likes)}</span>
+            <span>💬 ${formatCount(video.comments)}</span>
+            <span>👁 ${formatCount(video.views)}</span>
+        </div>
+    `;
 }
 
 function fileToBase64(file) {
@@ -545,3 +864,4 @@ window.sendFriendReq = sendFriendReq;
 window.doFollow = doFollow;
 window.doUnfollow = doUnfollow;
 window.showUserProfile = showUserProfile;
+window.openChat = openChat;

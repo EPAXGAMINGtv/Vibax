@@ -59,7 +59,7 @@ public class VideoManager {
 
     public static List<Video> getVideosByUser(String username) {
         return getAllVideos().stream()
-                .filter(v -> v.authorUsername.equals(username))
+                .filter(v -> v.authorUsername != null && v.authorUsername.equals(username))
                 .collect(Collectors.toList());
     }
 
@@ -67,9 +67,9 @@ public class VideoManager {
         String q = query.toLowerCase();
         return getAllVideos().stream()
                 .filter(v ->
-                        v.title.toLowerCase().contains(q) ||
-                        v.description.toLowerCase().contains(q) ||
-                        v.authorUsername.toLowerCase().contains(q) ||
+                        (v.title != null && v.title.toLowerCase().contains(q)) ||
+                        (v.description != null && v.description.toLowerCase().contains(q)) ||
+                        (v.authorUsername != null && v.authorUsername.toLowerCase().contains(q)) ||
                         v.tags.stream().anyMatch(t -> t.toLowerCase().contains(q))
                 )
                 .collect(Collectors.toList());

@@ -23,7 +23,7 @@ public class HttpConnection {
     private static final long MAX_RESPONSE_BYTES = 50L * 1024 * 1024; // 50 MB
 
     private static final HttpClient CLIENT = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
+            .connectTimeout(Duration.ofSeconds(10))
             .build();
 
     /**
@@ -51,10 +51,14 @@ public class HttpConnection {
             url += (url.contains("?") ? "&" : "?") + queryString;
         }
 
+        long bodyLen = body != null ? body.length() : 0;
+        Duration timeout = bodyLen > 1_000_000
+                ? Duration.ofSeconds(Math.min(60, 10 + bodyLen / 500_000))
+                : Duration.ofSeconds(10);
+
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                // SECURITY FIX: Add read/request timeout to prevent hung connections
-                .timeout(Duration.ofSeconds(10));
+                .timeout(timeout);
 
         if (passwordHash != null) {
             builder.header("X-Password-Hash", passwordHash);
@@ -65,20 +69,35 @@ public class HttpConnection {
         }
 
         switch (method.toUpperCase()) {
-            case "POST"   -> builder.POST(HttpRequest.BodyPublishers.ofString(body != null ? body : ""));
-            case "PUT"    -> builder.PUT(HttpRequest.BodyPublishers.ofString(body != null ? body : ""));
+            case "POST" -> {
+                builder.header("Content-Type", "text/plain; charset=utf-8");
+                builder.POST(HttpRequest.BodyPublishers.ofString(body != null ? body : ""));
+            }
+            case "PUT" -> {
+                builder.header("Content-Type", "text/plain; charset=utf-8");
+                builder.PUT(HttpRequest.BodyPublishers.ofString(body != null ? body : ""));
+            }
             case "DELETE" -> builder.DELETE();
             default       -> builder.GET();
         }
 
         HttpRequest request = builder.build();
 
-        // SECURITY FIX: Limit response size to MAX_RESPONSE_BYTES to prevent OOM
-        HttpResponse<byte[]> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        HttpResponse<byte[]> response;
+        try {
+            response = CLIENT.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        } catch (IOException e) {
+            throw new IOException("Request to " + url + " failed: " + e.getMessage(), e);
+        }
 
+        int status = response.statusCode();
         byte[] responseBytes = response.body();
         if (responseBytes.length > MAX_RESPONSE_BYTES) {
             throw new IOException("Response from server exceeds maximum allowed size of " + MAX_RESPONSE_BYTES + " bytes");
+        }
+
+        if (status < 200 || status >= 300) {
+            return null;
         }
 
         return new String(responseBytes, StandardCharsets.UTF_8);
@@ -95,6 +114,69 @@ public class HttpConnection {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * Send an HTTP request and return raw bytes (for binary downloads).
+     */
+    public static byte[] sendRequestBytes(
+            String url,
+            String method,
+            String passwordHash,
+            String body,
+            Map<String, String> queryParams,
+            Map<String, String> extraHeaders
+    ) throws IOException, InterruptedException {
+
+        if (queryParams != null && !queryParams.isEmpty()) {
+            String queryString = queryParams.entrySet().stream()
+                    .map(entry ->
+                            URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8) +
+                            "=" +
+                            URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8))
+                    .collect(Collectors.joining("&"));
+            url += (url.contains("?") ? "&" : "?") + queryString;
+        }
+
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(30));
+
+        if (passwordHash != null) {
+            builder.header("X-Password-Hash", passwordHash);
+        }
+
+        if (extraHeaders != null) {
+            extraHeaders.forEach(builder::header);
+        }
+
+        switch (method.toUpperCase()) {
+            case "POST" -> {
+                builder.header("Content-Type", "text/plain; charset=utf-8");
+                builder.POST(HttpRequest.BodyPublishers.ofString(body != null ? body : ""));
+            }
+            case "PUT" -> {
+                builder.header("Content-Type", "text/plain; charset=utf-8");
+                builder.PUT(HttpRequest.BodyPublishers.ofString(body != null ? body : ""));
+            }
+            case "DELETE" -> builder.DELETE();
+            default       -> builder.GET();
+        }
+
+        HttpRequest request = builder.build();
+        HttpResponse<byte[]> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofByteArray());
+
+        int status = response.statusCode();
+        byte[] responseBytes = response.body();
+        if (responseBytes.length > MAX_RESPONSE_BYTES) {
+            throw new IOException("Response exceeds maximum allowed size of " + MAX_RESPONSE_BYTES + " bytes");
+        }
+
+        if (status < 200 || status >= 300) {
+            return null;
+        }
+
+        return responseBytes;
     }
 
     public static String getServerName(String url, String pwhash) {

@@ -420,6 +420,32 @@ public class StorageAPI {
         });
     }
 
+    public static byte[] downloadFile(String serverName, String fileName) {
+        try {
+            return executeWithRetryAndCircuitBreaker(serverName, () -> {
+                String serverAddress = resolveServerUrl(serverName);
+                if (serverAddress == null) try {
+                    throw new StorageAPIException("Server not found", ErrorCode.SERVER_NOT_FOUND);
+                } catch (StorageAPIException e) {
+                    throw new RuntimeException(e);
+                }
+                String url = "http://" + serverAddress + "/download?path=" + URLEncoder.encode(fileName, StandardCharsets.UTF_8);
+                ServerConfig s = findServerByName(serverName);
+                try {
+                    byte[] bytes = HttpConnection.sendRequestBytes(url, "GET", s != null ? s.passwordHash : null, null, null, null);
+                    metrics.recordSuccess();
+                    return bytes;
+                } catch (Exception e) {
+                    metrics.recordFailure();
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (Exception e) {
+            Logger.error("downloadFile failed on " + serverName + " for " + fileName + ": " + e.getMessage());
+            return null;
+        }
+    }
+
     public static boolean writeFile(String serverName, String fileName, String content) {
         try {
             executeWithRetryAndCircuitBreakerVoid(serverName, () -> {

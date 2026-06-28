@@ -58,6 +58,7 @@
                 <div class="search-header">
                     <input type="text" id="search-input" placeholder="Suche User, Videos, Tags...">
                 </div>
+                <div id="search-tags" class="search-tags"></div>
                 <div id="search-results" class="search-results"></div>
             </div>
 
@@ -66,19 +67,27 @@
                 <div class="upload-container">
                     <h2>Video posten</h2>
                     <input type="text" id="upload-title" placeholder="Titel">
-                    <textarea id="upload-desc" placeholder="Beschreibung"></textarea>
-                    <input type="text" id="upload-tags" placeholder="Tags (kommagetrennt)">
+                    <textarea id="upload-desc" placeholder="Beschreibung — #hashtags werden automatisch erkannt"></textarea>
+                    <div class="tag-input-wrapper">
+                        <input type="text" id="upload-tags" placeholder="Tags (kommagetrennt)" autocomplete="off">
+                        <div id="tag-suggestions" class="tag-suggestions hidden"></div>
+                    </div>
                     <input type="file" id="upload-file" accept="video/*,image/*">
+                    <div id="upload-progress" class="upload-progress hidden">
+                        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+                        <span id="progress-text">0%</span>
+                    </div>
                     <button id="upload-btn" class="btn-primary">Posten</button>
                 </div>
             </div>
 
-            <!-- Friends View -->
+            <!-- Friends & Chat View -->
             <div id="view-friends" class="view">
                 <h2 class="view-title">Freundschaftsanfragen</h2>
                 <div id="friend-requests"></div>
                 <h2 class="view-title">Meine Freunde</h2>
                 <div id="friends-list"></div>
+                <div id="friends-chat-list"></div>
             </div>
 
             <!-- Profile View -->
@@ -92,6 +101,14 @@
                 <button class="back-btn" id="back-from-user">← Zurück</button>
                 <div id="user-profile-header" class="profile-header"></div>
                 <div id="user-profile-videos" class="profile-videos"></div>
+            </div>
+
+            <!-- Video Preview Overlay -->
+            <div id="video-preview-modal" class="modal hidden">
+                <div class="video-preview-content">
+                    <button class="close-btn" id="close-video-preview">×</button>
+                    <div id="video-preview-container"></div>
+                </div>
             </div>
 
             <!-- Comments Modal -->
@@ -115,7 +132,24 @@
                     <h3>Teilen</h3>
                     <p id="share-link"></p>
                     <button id="copy-link" class="btn-primary">Link kopieren</button>
-                    <button class="close-btn" id="close-share">Schließen</button>
+                    <h4 style="margin-top:1rem;color:var(--text-muted)">An Freund senden</h4>
+                    <div id="share-friends-list" class="share-friends-list"></div>
+                    <button class="close-btn" id="close-share" style="margin-top:0.5rem">Schließen</button>
+                </div>
+            </div>
+
+            <!-- Chat Modal -->
+            <div id="chat-modal" class="modal hidden">
+                <div class="modal-content chat-content">
+                    <div class="modal-header">
+                        <h3 id="chat-partner-name">Chat</h3>
+                        <button class="close-btn" id="close-chat">×</button>
+                    </div>
+                    <div id="chat-messages" class="chat-messages"></div>
+                    <div class="chat-input">
+                        <input type="text" id="chat-text" placeholder="Nachricht schreiben...">
+                        <button id="chat-send">Senden</button>
+                    </div>
                 </div>
             </div>
         </div>

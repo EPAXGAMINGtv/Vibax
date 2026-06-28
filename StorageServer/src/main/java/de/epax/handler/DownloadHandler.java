@@ -9,6 +9,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 
 public class DownloadHandler extends AuthenticatedHandler implements HttpHandler {
 
@@ -35,7 +37,7 @@ public class DownloadHandler extends AuthenticatedHandler implements HttpHandler
             return;
         }
 
-        String path = query.substring("path=".length());
+        String path = URLDecoder.decode(query.substring("path=".length()), StandardCharsets.UTF_8);
 
         File file;
         try {
