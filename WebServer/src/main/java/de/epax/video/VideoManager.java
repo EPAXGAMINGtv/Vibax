@@ -63,6 +63,13 @@ public class VideoManager {
                 .collect(Collectors.toList());
     }
 
+    public static List<Video> searchVideosByTag(String tag) {
+        String q = tag.toLowerCase();
+        return getAllVideos().stream()
+                .filter(v -> v.tags.stream().anyMatch(t -> t.toLowerCase().contains(q)))
+                .collect(Collectors.toList());
+    }
+
     public static List<Video> searchVideos(String query) {
         String q = query.toLowerCase();
         return getAllVideos().stream()

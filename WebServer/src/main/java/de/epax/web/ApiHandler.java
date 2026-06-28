@@ -292,6 +292,13 @@ public class ApiHandler implements HttpHandler {
 
     private void handleSearchVideos(HttpExchange ex) throws IOException {
         String q = ex.getRequestURI().getQuery();
+        if (q != null && q.startsWith("tag=")) {
+            String tag = decode(q.substring(4));
+            List<Map<String, Object>> results = VideoManager.searchVideosByTag(tag).stream()
+                    .map(VideoManager::toPublicMap).collect(Collectors.toList());
+            sendJson(ex, 200, JsonUtil.object(Map.of("videos", results)));
+            return;
+        }
         String query = q != null && q.startsWith("q=") ? decode(q.substring(2)) : "";
         List<Map<String, Object>> results = VideoManager.searchVideos(query).stream()
                 .map(VideoManager::toPublicMap).collect(Collectors.toList());
