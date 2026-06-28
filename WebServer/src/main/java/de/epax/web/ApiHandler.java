@@ -69,6 +69,8 @@ public class ApiHandler implements HttpHandler {
                 handleListVideos(exchange);
             } else if (path.equals("/api/videos") && "POST".equals(method)) {
                 handleCreateVideo(body, exchange);
+            } else if (path.equals("/api/videos/byids") && "GET".equals(method)) {
+                handleVideosByIds(exchange);
             } else if (path.startsWith("/api/videos/") && "GET".equals(method)) {
                 handleGetVideo(path, exchange);
             } else if (path.equals("/api/videos/search") && "GET".equals(method)) {
@@ -77,6 +79,14 @@ public class ApiHandler implements HttpHandler {
                 handleLike(body, exchange);
             } else if (path.equals("/api/unlike") && "POST".equals(method)) {
                 handleUnlike(body, exchange);
+            } else if (path.equals("/api/repost") && "POST".equals(method)) {
+                handleRepost(body, exchange);
+            } else if (path.equals("/api/unrepost") && "POST".equals(method)) {
+                handleUnrepost(body, exchange);
+            } else if (path.equals("/api/favorite") && "POST".equals(method)) {
+                handleFavorite(body, exchange);
+            } else if (path.equals("/api/unfavorite") && "POST".equals(method)) {
+                handleUnfavorite(body, exchange);
             } else if (path.equals("/api/share") && "POST".equals(method)) {
                 handleShare(body, exchange);
             } else if (path.equals("/api/watch") && "POST".equals(method)) {
@@ -97,6 +107,10 @@ public class ApiHandler implements HttpHandler {
                 handleSendMessage(body, exchange);
             } else if (path.startsWith("/api/messages/") && "GET".equals(method)) {
                 handleGetMessages(path, exchange);
+            } else if (path.equals("/api/inbox") && "GET".equals(method)) {
+                handleInbox(exchange);
+            } else if (path.equals("/api/unread") && "GET".equals(method)) {
+                handleUnread(exchange);
             } else if (path.equals("/api/share/tofriend") && "POST".equals(method)) {
                 handleShareToFriend(body, exchange);
             } else {
@@ -146,6 +160,9 @@ public class ApiHandler implements HttpHandler {
         if (user == null) return;
         Map<String, Object> map = UserManager.toPublicMap(user);
         map.put("likes", user.likes);
+        map.put("reposts", user.reposts);
+        map.put("favorites", user.favorites);
+        map.put("followingList", user.following);
         map.put("friendsList", user.friends);
         map.put("friendRequestsReceived", user.friendRequestsReceived);
         sendJson(ex, 200, JsonUtil.object(map));
@@ -160,6 +177,8 @@ public class ApiHandler implements HttpHandler {
         }
         User viewer = getUser(ex);
         Map<String, Object> map = UserManager.toPublicMap(user);
+        map.put("reposts", user.reposts);
+        map.put("followingList", user.following);
         if (viewer != null) {
             map.put("isFollowing", viewer.following.contains(username));
             map.put("isFriend", viewer.friends.contains(username));
@@ -223,13 +242,20 @@ public class ApiHandler implements HttpHandler {
         User user = getUser(ex);
         String username = user != null ? user.username : null;
         int limit = 20;
+        int offset = 0;
         String q = ex.getRequestURI().getQuery();
-        if (q != null && q.contains("limit=")) {
-            try { limit = Integer.parseInt(q.split("limit=")[1].split("&")[0]); } catch (Exception ignored) {}
+        if (q != null) {
+            for (String param : q.split("&")) {
+                String[] kv = param.split("=", 2);
+                if (kv.length != 2) continue;
+                if ("limit".equals(kv[0])) try { limit = Integer.parseInt(kv[1]); } catch (Exception ignored) {}
+                if ("offset".equals(kv[0])) try { offset = Integer.parseInt(kv[1]); } catch (Exception ignored) {}
+            }
         }
-        List<Map<String, Object>> feed = fypService.getFeedForUser(username, limit).stream()
+        List<Map<String, Object>> feed = fypService.getFeedForUser(username, limit, offset).stream()
                 .map(VideoManager::toPublicMap).collect(Collectors.toList());
-        sendJson(ex, 200, JsonUtil.object(Map.of("videos", feed)));
+        boolean hasMore = feed.size() >= limit;
+        sendJson(ex, 200, JsonUtil.object(Map.of("videos", feed, "hasMore", hasMore ? "true" : "false")));
     }
 
     private void handleListVideos(HttpExchange ex) throws IOException {
@@ -279,6 +305,22 @@ public class ApiHandler implements HttpHandler {
         }
     }
 
+    private void handleVideosByIds(HttpExchange ex) throws IOException {
+        String q = ex.getRequestURI().getQuery();
+        List<Map<String, Object>> result = new ArrayList<>();
+        if (q != null && q.startsWith("ids=")) {
+            String idsParam = decode(q.substring(4));
+            for (String id : idsParam.split(",")) {
+                id = id.trim();
+                if (!id.isEmpty()) {
+                    Video v = VideoManager.getVideo(id);
+                    if (v != null) result.add(VideoManager.toPublicMap(v));
+                }
+            }
+        }
+        sendJson(ex, 200, JsonUtil.object(Map.of("videos", result)));
+    }
+
     private void handleGetVideo(String path, HttpExchange ex) throws IOException {
         String id = path.substring("/api/videos/".length());
         Video video = VideoManager.getVideo(id);
@@ -318,6 +360,38 @@ public class ApiHandler implements HttpHandler {
         if (user == null) return;
         Map<String, String> data = JsonUtil.parseSimpleObject(body);
         boolean ok = VideoManager.unlikeVideo(user.username, data.get("videoId"));
+        sendJson(ex, ok ? 200 : 400, JsonUtil.object(Map.of("ok", ok)));
+    }
+
+    private void handleRepost(String body, HttpExchange ex) throws IOException {
+        User user = requireUser(ex);
+        if (user == null) return;
+        Map<String, String> data = JsonUtil.parseSimpleObject(body);
+        boolean ok = VideoManager.repostVideo(user.username, data.get("videoId"));
+        sendJson(ex, ok ? 200 : 400, JsonUtil.object(Map.of("ok", ok)));
+    }
+
+    private void handleUnrepost(String body, HttpExchange ex) throws IOException {
+        User user = requireUser(ex);
+        if (user == null) return;
+        Map<String, String> data = JsonUtil.parseSimpleObject(body);
+        boolean ok = VideoManager.unrepostVideo(user.username, data.get("videoId"));
+        sendJson(ex, ok ? 200 : 400, JsonUtil.object(Map.of("ok", ok)));
+    }
+
+    private void handleFavorite(String body, HttpExchange ex) throws IOException {
+        User user = requireUser(ex);
+        if (user == null) return;
+        Map<String, String> data = JsonUtil.parseSimpleObject(body);
+        boolean ok = UserManager.addFavorite(user.username, data.get("videoId"));
+        sendJson(ex, ok ? 200 : 400, JsonUtil.object(Map.of("ok", ok)));
+    }
+
+    private void handleUnfavorite(String body, HttpExchange ex) throws IOException {
+        User user = requireUser(ex);
+        if (user == null) return;
+        Map<String, String> data = JsonUtil.parseSimpleObject(body);
+        boolean ok = UserManager.removeFavorite(user.username, data.get("videoId"));
         sendJson(ex, ok ? 200 : 400, JsonUtil.object(Map.of("ok", ok)));
     }
 
@@ -426,6 +500,41 @@ public class ApiHandler implements HttpHandler {
         } else {
             sendJson(ex, 500, JsonUtil.object(Map.of("error", "Upload failed")));
         }
+    }
+
+    private void handleInbox(HttpExchange ex) throws IOException {
+        User user = requireUser(ex);
+        if (user == null) return;
+        List<Map<String, Object>> activities = new ArrayList<>();
+        List<Video> allVideos = VideoManager.getAllVideos();
+        for (Video v : allVideos) {
+            for (String liker : v.likedBy) {
+                if (user.friends.contains(liker) || user.following.contains(liker)) {
+                    Map<String, Object> act = new LinkedHashMap<>();
+                    act.put("type", "like");
+                    act.put("username", liker);
+                    act.put("videoId", v.id);
+                    act.put("videoTitle", v.title);
+                    act.put("videoAuthor", v.authorUsername);
+                    act.put("createdAt", v.createdAt);
+                    activities.add(act);
+                }
+            }
+        }
+        activities.sort((a, b) -> Long.compare(
+                ((Number) b.get("createdAt")).longValue(),
+                ((Number) a.get("createdAt")).longValue()
+        ));
+        if (activities.size() > 50) activities = activities.subList(0, 50);
+        sendJson(ex, 200, JsonUtil.object(Map.of("activities", activities)));
+    }
+
+    private void handleUnread(HttpExchange ex) throws IOException {
+        User user = requireUser(ex);
+        if (user == null) return;
+        int msgCount = MessageManager.getUnreadCount(user.username);
+        int reqCount = user.friendRequestsReceived != null ? user.friendRequestsReceived.size() : 0;
+        sendJson(ex, 200, JsonUtil.object(Map.of("messages", msgCount, "requests", reqCount)));
     }
 
     private void handleSendMessage(String body, HttpExchange ex) throws IOException {

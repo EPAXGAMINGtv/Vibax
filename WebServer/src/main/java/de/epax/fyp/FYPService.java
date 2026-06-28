@@ -18,6 +18,10 @@ public class FYPService {
     private final RecommendationEngine engine = new RecommendationEngine();
 
     public List<Video> getFeedForUser(String username, int limit) {
+        return getFeedForUser(username, limit, 0);
+    }
+
+    public List<Video> getFeedForUser(String username, int limit, int offset) {
         List<Video> allVideos = VideoManager.getAllVideos();
         if (allVideos.isEmpty()) return List.of();
 
@@ -46,13 +50,19 @@ public class FYPService {
             watched = new HashSet<>(user.watchedVideos);
         }
 
-        List<RecommendationEngine.ScoredVideo> ranked = engine.rank(candidates, profile, watched, limit);
+        int totalLimit = offset + limit;
+        List<RecommendationEngine.ScoredVideo> ranked = engine.rank(candidates, profile, watched, totalLimit);
 
         Map<String, Video> videoMap = allVideos.stream().collect(Collectors.toMap(v -> v.id, v -> v));
         List<Video> feed = new ArrayList<>();
+        int idx = 0;
         for (RecommendationEngine.ScoredVideo sv : ranked) {
-            Video v = videoMap.get(sv.videoId);
-            if (v != null) feed.add(v);
+            if (idx >= offset) {
+                Video v = videoMap.get(sv.videoId);
+                if (v != null) feed.add(v);
+                if (feed.size() >= limit) break;
+            }
+            idx++;
         }
         return feed;
     }

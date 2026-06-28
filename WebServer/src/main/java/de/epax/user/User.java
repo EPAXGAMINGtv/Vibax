@@ -12,6 +12,7 @@ public class User {
     public List<String> favorites;
     public List<String> messages;
     public List<String> likes;
+    public List<String> reposts;
     public List<String> followers;
     public List<String> following;
     public List<String> friends;
@@ -24,6 +25,7 @@ public class User {
         this.favorites = new ArrayList<>();
         this.messages = new ArrayList<>();
         this.likes = new ArrayList<>();
+        this.reposts = new ArrayList<>();
         this.followers = new ArrayList<>();
         this.following = new ArrayList<>();
         this.friends = new ArrayList<>();

@@ -78,9 +78,21 @@ public final class StorageHelper {
         return null;
     }
 
+    public static String readNoCache(String path) {
+        for (String server : StorageAPI.getServerNames()) {
+            Map<String, Object> health = StorageAPI.getServerHealth(server);
+            if (health != null && Boolean.TRUE.equals(health.get("online"))) {
+                String content = StorageAPI.readFile(server, path, false);
+                if (content != null) return content;
+            }
+        }
+        return null;
+    }
+
     /**
      * Writes content only to the least-utilized server (not replicated).
      * Falls back to any online server if no health info is available.
+     * Clears entire cache to prevent stale reads across servers.
      */
     public static boolean write(String path, String content) {
         String target = getLeastUsedServer();
@@ -88,6 +100,7 @@ public final class StorageHelper {
         if (target == null) return false;
 
         if (StorageAPI.writeFile(target, path, content)) {
+            StorageAPI.clearCache();
             Logger.info("Written to " + target + ": " + path);
             return true;
         }

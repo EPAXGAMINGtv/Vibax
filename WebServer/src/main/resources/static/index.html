@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vibax — Deine Social Media Plattform</title>
+    <title>Vibax</title>
     <link rel="stylesheet" href="/css/app.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -26,7 +26,7 @@
                     <input type="text" id="login-user" placeholder="Benutzername" required>
                     <input type="password" id="login-pass" placeholder="Passwort" required>
                     <button type="submit" class="btn-primary">Anmelden</button>
-                    <p class="demo-hint">Demo: demo / demo123</p>
+                    <p class="demo-label">Demo: demo / demo123</p>
                 </form>
                 <form id="register-form" class="auth-form">
                     <input type="text" id="reg-user" placeholder="Benutzername" required>
@@ -41,11 +41,26 @@
         <!-- Main App -->
         <div id="main-screen" class="screen">
             <nav class="bottom-nav">
-                <button class="nav-btn active" data-view="feed"><span>🏠</span><small>Home</small></button>
-                <button class="nav-btn" data-view="search"><span>🔍</span><small>Suchen</small></button>
-                <button class="nav-btn upload-btn" data-view="upload"><span>+</span></button>
-                <button class="nav-btn" data-view="friends"><span>👥</span><small>Freunde</small></button>
-                <button class="nav-btn" data-view="profile"><span>👤</span><small>Profil</small></button>
+                <button class="nav-btn active" data-view="feed">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    <small>Home</small>
+                </button>
+                <button class="nav-btn" data-view="search">
+                    <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <small>Suchen</small>
+                </button>
+                <button class="nav-btn upload-btn" data-view="upload">
+                    <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <button class="nav-btn" data-view="inbox" id="nav-inbox">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    <span id="inbox-badge" class="nav-badge hidden">0</span>
+                    <small>Inbox</small>
+                </button>
+                <button class="nav-btn" data-view="profile">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <small>Profil</small>
+                </button>
             </nav>
 
             <!-- Feed View -->
@@ -67,7 +82,7 @@
                 <div class="upload-container">
                     <h2>Video posten</h2>
                     <input type="text" id="upload-title" placeholder="Titel">
-                    <textarea id="upload-desc" placeholder="Beschreibung — #hashtags werden automatisch erkannt"></textarea>
+                    <textarea id="upload-desc" placeholder="Beschreibung -- #hashtags werden automatisch erkannt"></textarea>
                     <div class="tag-input-wrapper">
                         <input type="text" id="upload-tags" placeholder="Tags (kommagetrennt)" autocomplete="off">
                         <div id="tag-suggestions" class="tag-suggestions hidden"></div>
@@ -81,34 +96,37 @@
                 </div>
             </div>
 
-            <!-- Friends & Chat View -->
-            <div id="view-friends" class="view">
-                <h2 class="view-title">Freundschaftsanfragen</h2>
-                <div id="friend-requests"></div>
-                <h2 class="view-title">Meine Freunde</h2>
-                <div id="friends-list"></div>
-                <div id="friends-chat-list"></div>
+            <!-- Inbox View (friends + activity) -->
+            <div id="view-inbox" class="view">
+                <h2 class="view-title">Inbox</h2>
+                <div id="inbox-tabs" style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-top:0.5rem;">
+                    <button class="inbox-tab" style="flex:1;padding:0.65rem;border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-weight:500;font-size:0.8rem;border-bottom:2px solid transparent;" data-ibt="activity">Aktivitaet</button>
+                    <button class="inbox-tab active" style="flex:1;padding:0.65rem;border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-weight:500;font-size:0.8rem;border-bottom:2px solid transparent;" data-ibt="friends">Freunde</button>
+                </div>
+                <div id="inbox-activity" style="display:none;"></div>
+                <div id="inbox-friends">
+                    <div id="friend-requests"></div>
+                    <h3 style="font-size:0.8rem;color:var(--text-muted);padding:0.75rem 1rem 0.25rem;text-transform:uppercase;letter-spacing:0.5px;">Meine Freunde</h3>
+                    <div id="friends-list"></div>
+                    <div id="friends-chat-list"></div>
+                </div>
             </div>
 
             <!-- Profile View -->
             <div id="view-profile" class="view">
                 <div id="profile-header" class="profile-header"></div>
+                <div id="profile-tabs" class="profile-tabs"></div>
                 <div id="profile-videos" class="profile-videos"></div>
             </div>
 
             <!-- User Profile View -->
             <div id="view-user" class="view">
-                <button class="back-btn" id="back-from-user">← Zurück</button>
+                <button class="back-btn" id="back-from-user">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                    Zurueck
+                </button>
                 <div id="user-profile-header" class="profile-header"></div>
                 <div id="user-profile-videos" class="profile-videos"></div>
-            </div>
-
-            <!-- Video Preview Overlay -->
-            <div id="video-preview-modal" class="modal hidden">
-                <div class="video-preview-content">
-                    <button class="close-btn" id="close-video-preview">×</button>
-                    <div id="video-preview-container"></div>
-                </div>
             </div>
 
             <!-- Comments Modal -->
@@ -116,7 +134,9 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3>Kommentare</h3>
-                        <button class="close-btn" id="close-comments">×</button>
+                        <button class="close-btn" id="close-comments">
+                            <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
                     </div>
                     <div id="comments-list" class="comments-list"></div>
                     <div class="comment-input">
@@ -132,9 +152,9 @@
                     <h3>Teilen</h3>
                     <p id="share-link"></p>
                     <button id="copy-link" class="btn-primary">Link kopieren</button>
-                    <h4 style="margin-top:1rem;color:var(--text-muted)">An Freund senden</h4>
+                    <h4 style="margin-top:1rem;color:var(--text-muted);">An Freund senden</h4>
                     <div id="share-friends-list" class="share-friends-list"></div>
-                    <button class="close-btn" id="close-share" style="margin-top:0.5rem">Schließen</button>
+                    <button class="close-btn" id="close-share" style="margin-top:0.5rem;">Schliessen</button>
                 </div>
             </div>
 
@@ -143,12 +163,16 @@
                 <div class="modal-content chat-content">
                     <div class="modal-header">
                         <h3 id="chat-partner-name">Chat</h3>
-                        <button class="close-btn" id="close-chat">×</button>
+                        <button class="close-btn" id="close-chat">
+                            <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
                     </div>
                     <div id="chat-messages" class="chat-messages"></div>
                     <div class="chat-input">
                         <input type="text" id="chat-text" placeholder="Nachricht schreiben...">
-                        <button id="chat-send">Senden</button>
+                        <button id="chat-send">
+                            <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
                     </div>
                 </div>
             </div>

@@ -41,7 +41,7 @@ public class VideoManager {
     }
 
     public static Video getVideo(String id) {
-        String json = StorageHelper.read(getVideoPath(id));
+        String json = StorageHelper.readNoCache(getVideoPath(id));
         return json != null ? fromJson(json) : null;
     }
 
@@ -96,6 +96,7 @@ public class VideoManager {
         if (!UserManager.isLiked(username, videoId)) {
             UserManager.addLike(username, videoId);
             v.likes++;
+            if (!v.likedBy.contains(username)) v.likedBy.add(username);
             return updateVideo(v);
         }
         return true;
@@ -107,6 +108,7 @@ public class VideoManager {
         if (UserManager.isLiked(username, videoId)) {
             UserManager.removeLike(username, videoId);
             v.likes = Math.max(0, v.likes - 1);
+            v.likedBy.remove(username);
             return updateVideo(v);
         }
         return true;
@@ -116,6 +118,24 @@ public class VideoManager {
         Video v = getVideo(videoId);
         if (v == null) return false;
         v.shares++;
+        return updateVideo(v);
+    }
+
+    public static boolean repostVideo(String username, String videoId) {
+        Video v = getVideo(videoId);
+        if (v == null) return false;
+        if (UserManager.addRepost(username, videoId)) {
+            v.reposts++;
+            return updateVideo(v);
+        }
+        return true;
+    }
+
+    public static boolean unrepostVideo(String username, String videoId) {
+        Video v = getVideo(videoId);
+        if (v == null) return false;
+        UserManager.removeRepost(username, videoId);
+        v.reposts = Math.max(0, v.reposts - 1);
         return updateVideo(v);
     }
 
@@ -149,8 +169,10 @@ public class VideoManager {
         map.put("mediaType", v.mediaType);
         map.put("thumbnailPath", v.thumbnailPath);
         map.put("likes", v.likes);
+        map.put("likedBy", v.likedBy);
         map.put("comments", v.comments);
         map.put("shares", v.shares);
+        map.put("reposts", v.reposts);
         map.put("views", v.views);
         map.put("createdAt", v.createdAt);
         return map;
@@ -172,8 +194,10 @@ public class VideoManager {
         v.mediaType = JsonUtil.extractString(json, "mediaType");
         v.thumbnailPath = JsonUtil.extractString(json, "thumbnailPath");
         v.likes = JsonUtil.extractInt(json, "likes", 0);
+        v.likedBy = JsonUtil.extractStringArray(json, "likedBy");
         v.comments = JsonUtil.extractInt(json, "comments", 0);
         v.shares = JsonUtil.extractInt(json, "shares", 0);
+        v.reposts = JsonUtil.extractInt(json, "reposts", 0);
         v.views = JsonUtil.extractInt(json, "views", 0);
         v.createdAt = JsonUtil.extractLong(json, "createdAt", System.currentTimeMillis());
         return v;

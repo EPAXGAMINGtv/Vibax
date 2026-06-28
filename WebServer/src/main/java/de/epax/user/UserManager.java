@@ -51,7 +51,7 @@ public class UserManager {
     }
 
     public static User getUser(String username) {
-        String json = StorageHelper.read(getUserPath(username));
+        String json = StorageHelper.readNoCache(getUserPath(username));
         return json != null ? fromJson(json) : null;
     }
 
@@ -156,6 +156,40 @@ public class UserManager {
         return updateUser(user);
     }
 
+    public static boolean addRepost(String username, String videoId) {
+        User user = getUser(username);
+        if (user == null) return false;
+        if (!user.reposts.contains(videoId)) {
+            user.reposts.add(videoId);
+            return updateUser(user);
+        }
+        return true;
+    }
+
+    public static boolean removeRepost(String username, String videoId) {
+        User user = getUser(username);
+        if (user == null) return false;
+        user.reposts.remove(videoId);
+        return updateUser(user);
+    }
+
+    public static boolean addFavorite(String username, String videoId) {
+        User user = getUser(username);
+        if (user == null) return false;
+        if (!user.favorites.contains(videoId)) {
+            user.favorites.add(videoId);
+            return updateUser(user);
+        }
+        return true;
+    }
+
+    public static boolean removeFavorite(String username, String videoId) {
+        User user = getUser(username);
+        if (user == null) return false;
+        user.favorites.remove(videoId);
+        return updateUser(user);
+    }
+
     public static boolean isLiked(String username, String item) {
         User user = getUser(username);
         return user != null && user.likes.contains(item);
@@ -196,6 +230,7 @@ public class UserManager {
         map.put("favorites", user.favorites);
         map.put("messages", user.messages);
         map.put("likes", user.likes);
+        map.put("reposts", user.reposts);
         map.put("followers", user.followers);
         map.put("following", user.following);
         map.put("friends", user.friends);
@@ -217,6 +252,7 @@ public class UserManager {
             user.favorites = JsonUtil.extractStringArray(json, "favorites");
             user.messages = JsonUtil.extractStringArray(json, "messages");
             user.likes = JsonUtil.extractStringArray(json, "likes");
+            user.reposts = JsonUtil.extractStringArray(json, "reposts");
             user.followers = JsonUtil.extractStringArray(json, "followers");
             user.following = JsonUtil.extractStringArray(json, "following");
             user.friends = JsonUtil.extractStringArray(json, "friends");

@@ -5,13 +5,76 @@ import de.epax.util.StorageHelper;
 import de.epax.video.Video;
 import de.epax.video.VideoManager;
 
+import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.*;
 
 public final class MessageManager {
 
     private static final String MESSAGES_ROOT = "/messages";
+    private static final String ENCRYPTION_SECRET = "Vibax2024SecureKey!";
+    private static final String ALGORITHM = "AES/GCM/NoPadding";
+    private static final int GCM_IV_LENGTH = 12;
+    private static final int GCM_TAG_LENGTH = 128;
 
     private MessageManager() {}
+
+    private static SecretKeySpec deriveKey(String user1, String user2) {
+        try {
+            String sorted = user1.compareTo(user2) < 0 ? user1 + ":" + user2 : user2 + ":" + user1;
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest((sorted + ":" + ENCRYPTION_SECRET).getBytes(StandardCharsets.UTF_8));
+            return new SecretKeySpec(hash, "AES");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String encrypt(String plaintext, String user1, String user2) {
+        if (plaintext == null || plaintext.isEmpty()) return plaintext;
+        try {
+            SecretKeySpec key = deriveKey(user1, user2);
+            if (key == null) return plaintext;
+            Cipher cipher = Cipher.getInstance(ALGORITHM);
+            byte[] iv = new byte[GCM_IV_LENGTH];
+            SecureRandom random = new SecureRandom();
+            random.nextBytes(iv);
+            GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+            cipher.init(Cipher.ENCRYPT_MODE, key, spec);
+            byte[] ciphertext = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+            ByteBuffer buf = ByteBuffer.allocate(iv.length + ciphertext.length);
+            buf.put(iv);
+            buf.put(ciphertext);
+            return Base64.getEncoder().encodeToString(buf.array());
+        } catch (Exception e) {
+            return plaintext;
+        }
+    }
+
+    private static String decrypt(String encrypted, String user1, String user2) {
+        if (encrypted == null || encrypted.isEmpty()) return encrypted;
+        try {
+            SecretKeySpec key = deriveKey(user1, user2);
+            if (key == null) return encrypted;
+            byte[] decoded = Base64.getDecoder().decode(encrypted);
+            ByteBuffer buf = ByteBuffer.wrap(decoded);
+            byte[] iv = new byte[GCM_IV_LENGTH];
+            buf.get(iv);
+            byte[] ciphertext = new byte[buf.remaining()];
+            buf.get(ciphertext);
+            Cipher cipher = Cipher.getInstance(ALGORITHM);
+            GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+            cipher.init(Cipher.DECRYPT_MODE, key, spec);
+            return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return encrypted;
+        }
+    }
 
     public static String sendMessage(String from, String to, String text) {
         return sendMessage(from, to, text, null);
@@ -19,9 +82,11 @@ public final class MessageManager {
 
     public static String sendMessage(String from, String to, String text, String videoId) {
         String id = UUID.randomUUID().toString();
-        Message msg = new Message(id, from, to, text, videoId, System.currentTimeMillis());
-        String path = MESSAGES_ROOT + "/" + to + "/" + id + ".json";
-        if (StorageHelper.write(path, toJson(msg))) return id;
+        String encryptedText = encrypt(text, from, to);
+        Message msg = new Message(id, from, to, encryptedText, videoId, System.currentTimeMillis());
+        String receiverPath = MESSAGES_ROOT + "/" + to + "/" + id + ".json";
+        String senderPath = MESSAGES_ROOT + "/" + from + "/" + id + ".json";
+        if (StorageHelper.write(receiverPath, toJson(msg)) && StorageHelper.write(senderPath, toJson(msg))) return id;
         return null;
     }
 
@@ -37,6 +102,7 @@ public final class MessageManager {
             if (json == null) continue;
             Message msg = fromJson(json);
             if (msg != null && (msg.from.equals(other) || msg.to.equals(other))) {
+                msg.text = decrypt(msg.text, msg.from, msg.to);
                 all.add(msg);
             }
         }

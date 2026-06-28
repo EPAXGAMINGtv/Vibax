@@ -17,10 +17,13 @@ public class Video {
     public int comments;
     public int shares;
     public int views;
+    public int reposts;
+    public List<String> likedBy;
     public long createdAt;
 
     public Video() {
         this.tags = new ArrayList<>();
+        this.likedBy = new ArrayList<>();
         this.createdAt = System.currentTimeMillis();
         this.mediaType = "video";
     }

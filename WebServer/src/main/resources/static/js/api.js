@@ -36,7 +36,7 @@ const API = {
 
     me() { return this.request('GET', '/api/auth/me'); },
 
-    getFeed(limit = 20) { return this.request('GET', `/api/feed?limit=${limit}`); },
+    getFeed(limit = 20, offset = 0) { return this.request('GET', `/api/feed?limit=${limit}&offset=${offset}`); },
 
     getUser(username) { return this.request('GET', `/api/users/${username}`); },
 
@@ -51,6 +51,8 @@ const API = {
 
     getVideo(id) { return this.request('GET', `/api/videos/${id}`); },
 
+    getVideosByIds(ids) { return this.request('GET', `/api/videos/byids?ids=${ids.join(',')}`); },
+
     createVideo(data) { return this.request('POST', '/api/videos', data); },
 
     like(videoId) { return this.request('POST', '/api/like', { videoId }); },
@@ -58,6 +60,14 @@ const API = {
     unlike(videoId) { return this.request('POST', '/api/unlike', { videoId }); },
 
     share(videoId) { return this.request('POST', '/api/share', { videoId }); },
+
+    repost(videoId) { return this.request('POST', '/api/repost', { videoId }); },
+
+    unrepost(videoId) { return this.request('POST', '/api/unrepost', { videoId }); },
+
+    favorite(videoId) { return this.request('POST', '/api/favorite', { videoId }); },
+
+    unfavorite(videoId) { return this.request('POST', '/api/unfavorite', { videoId }); },
 
     watch(videoId) { return this.request('POST', '/api/watch', { videoId }); },
 
@@ -128,5 +138,11 @@ const API = {
         return this.request('POST', '/api/messages', { to, text });
     },
 
+    getInbox() {
+        return this.request('GET', '/api/inbox');
+    },
 
+    getUnread() {
+        return this.request('GET', '/api/unread');
+    },
 };
