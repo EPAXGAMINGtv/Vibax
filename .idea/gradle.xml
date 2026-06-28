@@ -10,6 +10,7 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/FYPAlgorithm" />
+            <option value="$PROJECT_DIR$/Proxy" />
             <option value="$PROJECT_DIR$/StorageAPI" />
             <option value="$PROJECT_DIR$/StorageServer" />
             <option value="$PROJECT_DIR$/WebServer" />

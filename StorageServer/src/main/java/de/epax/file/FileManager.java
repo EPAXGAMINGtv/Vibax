@@ -37,6 +37,9 @@ public class FileManager {
         if (relativePath == null) throw new IOException("Path cannot be null");
         relativePath = relativePath.trim();
         if (relativePath.equals("/") || relativePath.isEmpty()) relativePath = "";
+        while (relativePath.startsWith("/") || relativePath.startsWith("\\")) {
+            relativePath = relativePath.substring(1);
+        }
         File base = new File(storedFilesPath).getCanonicalFile();
         File target = new File(base, relativePath).getCanonicalFile();
         if (!target.getPath().startsWith(base.getPath())) {
@@ -557,4 +560,3 @@ public class FileManager {
      class FileMetadata {
         final Map<String, String> metadata = new ConcurrentHashMap<>();
     }
-

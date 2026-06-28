@@ -30,10 +30,18 @@ public class StorageServerStart {
 
         Logger.info("Starting StorageServer!");
 
+        String configFile = "storageserver.properties";
+        for (int i = 0; i < args.length; i++) {
+            if ("--config".equals(args[i]) && i + 1 < args.length) {
+                configFile = args[i + 1];
+                break;
+            }
+        }
+
         PropertiesManager properties = new PropertiesManager();
 
         try {
-            properties.load("server", "storageserver.properties");
+            properties.load("server", configFile);
         } catch (IOException e) {
             Logger.error("Failed to load storageserver.properties: " + e.getMessage());
             return;
@@ -46,20 +54,20 @@ public class StorageServerStart {
 
         // First startup: prompt for password and store BCrypt hash
         if (!properties.exists("server", "passwordHash")) {
+            String cliPassword = getArg(args, "--password");
             Logger.info("First startup — no API password set yet.");
-            String password = promptPassword("Set API password: ");
+            String password = cliPassword != null ? cliPassword : promptPassword("Set API password: ");
             if (password == null || password.isBlank()) {
                 Logger.error("Password cannot be empty!");
                 return;
             }
-            // SECURITY FIX: BCrypt with cost factor 12 (instead of SHA-256)
             String hash = BCrypt.withDefaults().hashToString(12, password.toCharArray());
             properties.set("server", "passwordHash", hash);
             Logger.info("Password hashed with BCrypt and saved.");
         }
 
         try {
-            properties.save("server", "storageserver.properties");
+            properties.save("server", configFile);
         } catch (IOException e) {
             Logger.error("Failed to save properties: " + e.getMessage());
         }
@@ -134,5 +142,12 @@ public class StorageServerStart {
         System.out.print(prompt);
         Scanner scanner = new Scanner(System.in);
         return scanner.hasNextLine() ? scanner.nextLine() : null;
+    }
+
+    private static String getArg(String[] args, String flag) {
+        for (int i = 0; i < args.length - 1; i++) {
+            if (flag.equals(args[i])) return args[i + 1];
+        }
+        return null;
     }
 }

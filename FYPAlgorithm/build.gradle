@@ -13,23 +13,37 @@ dependencies {
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    implementation project(':StorageAPI')
-    implementation project(':FYPAlgorithm')
 }
 
-jar{
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    manifest {
-        attributes(
-                'Main-Class': 'de.epax.WebServer'
-        )
-    }
-
-    from {
-        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java']
+        }
     }
 }
 
 test {
     useJUnitPlatform()
+}
+
+// Set Java version compatibility
+tasks.withType(JavaCompile) {
+    sourceCompatibility = '17'
+    targetCompatibility = '17'
+}
+
+// Create fat JAR task
+task fatJar(type: Jar) {
+    archiveClassifier = 'fat'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes(
+                'Main-Class': 'de.epax.Algorithm'
+        )
+    }
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    with jar
 }

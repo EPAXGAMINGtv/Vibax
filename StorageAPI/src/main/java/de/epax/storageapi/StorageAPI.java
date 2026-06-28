@@ -385,7 +385,7 @@ public class StorageAPI {
                 throw new StorageAPIException("Circuit breaker open for: " + serverName, ErrorCode.CIRCUIT_OPEN);
 
             try {
-                T result = RetryPolicy.executeWithRetry((Callable<T>) operation, MAX_RETRIES, RETRY_INITIAL_DELAY_MS);
+                T result = RetryPolicy.executeWithRetry(() -> operation.get(), MAX_RETRIES, RETRY_INITIAL_DELAY_MS);
                 if (cb != null) cb.recordSuccess();
                 metrics.recordSuccess();
                 return result;
@@ -397,7 +397,16 @@ public class StorageAPI {
         } catch (StorageAPIException e) {
             throw new RuntimeException(e);
         } catch (Exception e) {
-            throw new RuntimeException(new StorageAPIException("Request failed", ErrorCode.REQUEST_FAILED, e));
+            Throwable current = e;
+            while (current instanceof RuntimeException
+                    && current.getCause() != null
+                    && current.getCause() != current) {
+                current = current.getCause();
+            }
+            if (current instanceof StorageAPIException sae) {
+                throw new RuntimeException(sae);
+            }
+            throw new RuntimeException(new StorageAPIException("Request failed: " + current.getMessage(), ErrorCode.REQUEST_FAILED, current));
         }
     }
 
@@ -419,11 +428,21 @@ public class StorageAPI {
                 String url      = "http://" + serverAddress + "/writefile?path=" + URLEncoder.encode(fileName, StandardCharsets.UTF_8);
                 String response = sendPostRequest(url, content, serverName);
                 cache.invalidate("read:" + serverName + ":" + fileName);
+                if (response != null && response.toLowerCase(Locale.ROOT).contains("unauthorized")) {
+                    throw new StorageAPIException("Authentication failed for server " + serverName + ". Check serverpwhash-* in storageapi.properties", ErrorCode.AUTHENTICATION_FAILED);
+                }
                 if (response == null || !response.contains("Written to"))
-                    throw new StorageAPIException("Write failed", ErrorCode.REQUEST_FAILED);
+                    throw new StorageAPIException("Write failed. Server response: " + String.valueOf(response), ErrorCode.REQUEST_FAILED);
             });
             return true;
-        } catch (Exception e) { return false; }
+        } catch (Exception e) {
+            Throwable root = e;
+            while (root.getCause() != null && root.getCause() != root) {
+                root = root.getCause();
+            }
+            Logger.error("writeFile failed on " + serverName + " for " + fileName + ": " + e.getMessage() + " | rootCause=" + root.getClass().getSimpleName() + ": " + root.getMessage());
+            return false;
+        }
     }
 
     public static BatchResponse executeBatch(BatchRequest batch) {

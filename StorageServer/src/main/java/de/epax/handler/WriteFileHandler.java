@@ -4,7 +4,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import de.epax.file.FileManager;
 
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -50,11 +49,11 @@ public class WriteFileHandler extends AuthenticatedHandler implements HttpHandle
         String path = URLDecoder.decode(query.substring("path=".length()), StandardCharsets.UTF_8);
 
         // SECURITY FIX: Enforce write size limit
-        try (InputStream in = exchange.getRequestBody();
-             FileOutputStream out = new FileOutputStream(FileManager.resolveSafePath(path))) {
+        try (InputStream in = exchange.getRequestBody()) {
 
             byte[] buffer = new byte[8192];
             long written = 0;
+            StringBuilder body = new StringBuilder();
             int len;
             while ((len = in.read(buffer)) != -1) {
                 written += len;
@@ -62,9 +61,10 @@ public class WriteFileHandler extends AuthenticatedHandler implements HttpHandle
                     sendText(exchange, 413, "Payload Too Large (max " + MAX_WRITE_BYTES + " bytes)");
                     return;
                 }
-                out.write(buffer, 0, len);
+                body.append(new String(buffer, 0, len, StandardCharsets.UTF_8));
             }
 
+            FileManager.writeFile(path, body.toString());
             sendText(exchange, 200, "Written to " + path);
 
         } catch (Exception e) {

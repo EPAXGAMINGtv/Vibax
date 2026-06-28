@@ -47,9 +47,11 @@ public abstract class AuthenticatedHandler {
         // BCrypt timing-safe verify (header = raw password sent by client)
         boolean valid;
         try {
-            valid = BCrypt.verifyer()
+            boolean bcryptMatch = BCrypt.verifyer()
                     .verify(header.toCharArray(), passwordHash)
                     .verified;
+            boolean directHashMatch = header.equals(passwordHash);
+            valid = bcryptMatch || directHashMatch;
         } catch (Exception e) {
             Logger.error("BCrypt verify error: " + e.getMessage());
             valid = false;

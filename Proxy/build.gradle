@@ -1,0 +1,17 @@
+plugins {
+    id 'java'
+}
+
+group = 'de.epax'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes('Main-Class': 'de.epax.proxy.VibaxProxy')
+    }
+}

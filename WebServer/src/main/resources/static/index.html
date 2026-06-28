@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vibax — Deine Social Media Plattform</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Auth Screen -->
+        <div id="auth-screen" class="screen active">
+            <div class="auth-container">
+                <div class="logo">
+                    <span class="logo-icon">V</span>
+                    <h1>Vibax</h1>
+                </div>
+                <p class="tagline">Scroll. Like. Connect.</p>
+                <div class="auth-tabs">
+                    <button class="tab active" data-tab="login">Anmelden</button>
+                    <button class="tab" data-tab="register">Registrieren</button>
+                </div>
+                <form id="login-form" class="auth-form active">
+                    <input type="text" id="login-user" placeholder="Benutzername" required>
+                    <input type="password" id="login-pass" placeholder="Passwort" required>
+                    <button type="submit" class="btn-primary">Anmelden</button>
+                    <p class="demo-hint">Demo: demo / demo123</p>
+                </form>
+                <form id="register-form" class="auth-form">
+                    <input type="text" id="reg-user" placeholder="Benutzername" required>
+                    <input type="text" id="reg-name" placeholder="Anzeigename" required>
+                    <input type="password" id="reg-pass" placeholder="Passwort" required>
+                    <button type="submit" class="btn-primary">Registrieren</button>
+                </form>
+                <p id="auth-error" class="error-msg"></p>
+            </div>
+        </div>
+
+        <!-- Main App -->
+        <div id="main-screen" class="screen">
+            <nav class="bottom-nav">
+                <button class="nav-btn active" data-view="feed"><span>🏠</span><small>Home</small></button>
+                <button class="nav-btn" data-view="search"><span>🔍</span><small>Suchen</small></button>
+                <button class="nav-btn upload-btn" data-view="upload"><span>+</span></button>
+                <button class="nav-btn" data-view="friends"><span>👥</span><small>Freunde</small></button>
+                <button class="nav-btn" data-view="profile"><span>👤</span><small>Profil</small></button>
+            </nav>
+
+            <!-- Feed View -->
+            <div id="view-feed" class="view active">
+                <div id="feed-container" class="feed-container"></div>
+            </div>
+
+            <!-- Search View -->
+            <div id="view-search" class="view">
+                <div class="search-header">
+                    <input type="text" id="search-input" placeholder="Suche User, Videos, Tags...">
+                </div>
+                <div id="search-results" class="search-results"></div>
+            </div>
+
+            <!-- Upload View -->
+            <div id="view-upload" class="view">
+                <div class="upload-container">
+                    <h2>Video posten</h2>
+                    <input type="text" id="upload-title" placeholder="Titel">
+                    <textarea id="upload-desc" placeholder="Beschreibung"></textarea>
+                    <input type="text" id="upload-tags" placeholder="Tags (kommagetrennt)">
+                    <input type="file" id="upload-file" accept="video/*,image/*">
+                    <button id="upload-btn" class="btn-primary">Posten</button>
+                </div>
+            </div>
+
+            <!-- Friends View -->
+            <div id="view-friends" class="view">
+                <h2 class="view-title">Freundschaftsanfragen</h2>
+                <div id="friend-requests"></div>
+                <h2 class="view-title">Meine Freunde</h2>
+                <div id="friends-list"></div>
+            </div>
+
+            <!-- Profile View -->
+            <div id="view-profile" class="view">
+                <div id="profile-header" class="profile-header"></div>
+                <div id="profile-videos" class="profile-videos"></div>
+            </div>
+
+            <!-- User Profile View -->
+            <div id="view-user" class="view">
+                <button class="back-btn" id="back-from-user">← Zurück</button>
+                <div id="user-profile-header" class="profile-header"></div>
+                <div id="user-profile-videos" class="profile-videos"></div>
+            </div>
+
+            <!-- Comments Modal -->
+            <div id="comments-modal" class="modal hidden">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Kommentare</h3>
+                        <button class="close-btn" id="close-comments">×</button>
+                    </div>
+                    <div id="comments-list" class="comments-list"></div>
+                    <div class="comment-input">
+                        <input type="text" id="comment-text" placeholder="Kommentar schreiben...">
+                        <button id="comment-submit">Senden</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Share Modal -->
+            <div id="share-modal" class="modal hidden">
+                <div class="modal-content share-content">
+                    <h3>Teilen</h3>
+                    <p id="share-link"></p>
+                    <button id="copy-link" class="btn-primary">Link kopieren</button>
+                    <button class="close-btn" id="close-share">Schließen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/js/api.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,21 +1,24 @@
 package de.epax.user;
 
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 
-/**
- * Simple User class representing a user in the system.
- * This is just a data container - no storage logic here.
- */
 public class User {
     public String username;
     public String visibleName;
-    public String passwordHash; // SHA-256 hash of the password
+    public String passwordHash;
+    public String bio;
+    public String profilePicture;
     public List<String> favorites;
     public List<String> messages;
     public List<String> likes;
     public List<String> followers;
     public List<String> following;
+    public List<String> friends;
+    public List<String> friendRequestsSent;
+    public List<String> friendRequestsReceived;
+    public List<String> watchedVideos;
+    public long createdAt;
 
     public User() {
         this.favorites = new ArrayList<>();
@@ -23,6 +26,13 @@ public class User {
         this.likes = new ArrayList<>();
         this.followers = new ArrayList<>();
         this.following = new ArrayList<>();
+        this.friends = new ArrayList<>();
+        this.friendRequestsSent = new ArrayList<>();
+        this.friendRequestsReceived = new ArrayList<>();
+        this.watchedVideos = new ArrayList<>();
+        this.bio = "";
+        this.profilePicture = "";
+        this.createdAt = System.currentTimeMillis();
     }
 
     public User(String username, String visibleName, String passwordHash) {
